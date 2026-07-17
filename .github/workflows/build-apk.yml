@@ -1,9 +1,9 @@
-name: Build ML Cun Cung APK
+name: Build ML Cun Cung v2 APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [main, ml-cun-cung-v1]
+    branches: [main, ml-cun-cung-v2-semi3d]
   pull_request:
 
 permissions:
@@ -40,13 +40,13 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p output
-          cp app/build/outputs/apk/debug/app-debug.apk output/ML_Cun_Cung_v1.0-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk output/ML_Cun_Cung_v2.0_Semi3D-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ML_Cun_Cung_v1.0_APK
-          path: output/ML_Cun_Cung_v1.0-debug.apk
+          name: ML_Cun_Cung_v2.0_Semi3D_APK
+          path: output/ML_Cun_Cung_v2.0_Semi3D-debug.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -54,7 +54,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ML_Cun_Cung_build_reports
+          name: ML_Cun_Cung_v2_build_reports
           path: |
             app/build/reports
             app/build/test-results

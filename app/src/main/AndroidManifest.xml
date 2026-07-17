@@ -13,7 +13,7 @@
     <application
         android:allowBackup="true"
         android:icon="@drawable/ic_app_icon"
-        android:label="ML Cún Cưng"
+        android:label="ML Cún Cưng Semi 3D"
         android:roundIcon="@drawable/ic_app_icon"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
@@ -27,16 +27,22 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".IconMarkerActivity"
+            android:exported="false"
+            android:theme="@style/MarkerTheme" />
+
         <service
             android:name=".DogOverlayService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Hiển thị thú cưng nổi do người dùng chủ động bật." />
+                android:value="Hiển thị thú cưng bán 3D nổi do người dùng chủ động bật." />
         </service>
 
         <receiver android:name=".ReminderReceiver" android:exported="false" />
+        <receiver android:name=".FeedbackReceiver" android:exported="false" />
 
         <receiver
             android:name=".BootReceiver"
