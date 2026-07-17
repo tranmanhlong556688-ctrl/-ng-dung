@@ -1,9 +1,9 @@
-name: Build ML Cun Cung APK
+name: Build ML Cun Cung v2 APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [main, ml-cun-cung-v1]
+    branches: [main, ml-cun-cung-v2-semi3d]
   pull_request:
 
 permissions:
@@ -35,28 +35,35 @@ jobs:
           gradle-version: '8.9'
 
       - name: Lint, test and build APK
-        run: gradle --no-daemon clean lintDebug testDebugUnitTest assembleDebug
+        id: gradle_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon clean lintDebug testDebugUnitTest assembleDebug 2>&1 | tee build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ML_Cun_Cung_v2_build_log
+          path: build.log
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop when Gradle failed
+        if: steps.gradle_build.outcome == 'failure'
+        run: exit 1
 
       - name: Prepare APK
         run: |
           mkdir -p output
-          cp app/build/outputs/apk/debug/app-debug.apk output/ML_Cun_Cung_v1.0-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk output/ML_Cun_Cung_v2.0_Semi3D-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ML_Cun_Cung_v1.0_APK
-          path: output/ML_Cun_Cung_v1.0-debug.apk
+          name: ML_Cun_Cung_v2.0_Semi3D_APK
+          path: output/ML_Cun_Cung_v2.0_Semi3D-debug.apk
           if-no-files-found: error
           retention-days: 30
-
-      - name: Upload reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ML_Cun_Cung_build_reports
-          path: |
-            app/build/reports
-            app/build/test-results
-          if-no-files-found: ignore
-          retention-days: 14
