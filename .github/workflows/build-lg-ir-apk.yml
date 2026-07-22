@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - agent/lg-ir-remote
+      - agent/lg-ir-remote-v2
     paths:
       - "lg-ir-remote/**"
       - ".github/workflows/build-lg-ir-apk.yml"
@@ -44,12 +45,35 @@ jobs:
           gradle-version: "8.13"
 
       - name: Unit tests, lint and build APK
-        run: gradle --no-daemon -p lg-ir-remote testDebugUnitTest lintDebug assembleDebug
+        id: build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon -p lg-ir-remote testDebugUnitTest lintDebug assembleDebug 2>&1 | tee lg-ir-v2-build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LG-IR-Remote-v2-build-log
+          path: lg-ir-v2-build.log
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop when build failed
+        if: steps.build.outcome == 'failure'
+        run: exit 1
+
+      - name: Prepare APK
+        run: |
+          mkdir -p output
+          cp lg-ir-remote/app/build/outputs/apk/debug/app-debug.apk output/LG_IR_Remote_v2.0.apk
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: LG-IR-Remote-debug
-          path: lg-ir-remote/app/build/outputs/apk/debug/app-debug.apk
+          name: LG-IR-Remote-v2.0-APK
+          path: output/LG_IR_Remote_v2.0.apk
           if-no-files-found: error
           retention-days: 30
