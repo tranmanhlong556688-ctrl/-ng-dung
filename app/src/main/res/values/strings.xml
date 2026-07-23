@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ML Cún Cưng Semi 3D</string>
+    <string name="app_name">Auto Kiểm Tra Bình – Minh</string>
+    <string name="accessibility_description">Hiển thị bảng điều khiển nổi và thực hiện thao tác chạm P1/P2 theo cấu hình của người dùng.</string>
 </resources>

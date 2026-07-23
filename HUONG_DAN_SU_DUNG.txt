@@ -1,0 +1,43 @@
+AUTO KIỂM TRA BÌNH – MINH v1.0
+================================
+
+1. CÀI ỨNG DỤNG
+- Cài file AutoKiemTraBinh_Minh_v1.0.apk.
+- Nếu Android chặn, cho phép cài ứng dụng không rõ nguồn gốc đối với trình duyệt hoặc trình quản lý tệp đang dùng.
+
+2. BẬT TRỢ NĂNG
+- Mở Auto Kiểm Tra Bình – Minh.
+- Bấm “MỞ CÀI ĐẶT TRỢ NĂNG”.
+- Chọn dịch vụ Auto Kiểm Tra Bình – Minh.
+- Bật quyền sử dụng dịch vụ.
+
+3. ĐẶT P1 VÀ P2
+- Mở ứng dụng kiểm tra bình.
+- Trên bảng nổi, bấm THIẾT LẬP.
+- Kéo P1 vào chính giữa nút TẤT CẢ BÌNH THƯỜNG.
+- Kéo P2 vào chính giữa nút LƯU KẾT QUẢ TUẦN TRA.
+- Bấm KHÓA P1/P2.
+- Bấm THỬ P1 và THỬ P2 để kiểm tra.
+
+4. CHẠY
+- Nhập số vòng.
+- Hoặc chọn KHÔNG GIỚI HẠN.
+- Thời gian mặc định:
+  + P1 đến P1: 150 ms
+  + P1 lần 2 đến P2: 300 ms
+  + P2 đến vòng sau: 400 ms
+  + Thời lượng chạm: 60 ms
+- Bấm BẮT ĐẦU.
+- Chương trình đếm ngược 3 giây rồi chạy.
+
+5. DỪNG VÀ TẠM DỪNG
+- Bấm TẠM DỪNG để dừng tạm thời.
+- Bấm TIẾP TỤC để chạy lại.
+- Bấm DỪNG KHẨN để dừng ngay.
+- Có thể dừng từ thông báo hệ thống.
+
+6. LƯU Ý AN TOÀN
+- Luôn dùng THỬ P1/P2 trước khi chạy nhiều vòng.
+- Không di chuyển bảng nổi hoặc xoay màn hình khi chương trình đang chạy.
+- Khi đổi ứng dụng hoặc tắt màn hình, chương trình tự tạm dừng.
+- Sau khi giao diện ứng dụng kiểm tra thay đổi, cần hiệu chỉnh lại P1/P2.

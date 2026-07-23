@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Auto Kiểm Tra Bình – Minh"
+            android:textColor="@color/text_dark"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvServiceStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Trợ năng: Chưa bật"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnOpenAccessibility"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="14dp"
+            android:text="1. MỞ CÀI ĐẶT TRỢ NĂNG" />
+
+        <Button
+            android:id="@+id/btnShowPanel"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="10dp"
+            android:text="2. HIỆN BẢNG ĐIỀU KHIỂN NỔI" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="Cách dùng lần đầu"
+            android:textColor="@color/primary_dark"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:lineSpacingExtra="5dp"
+            android:text="1) Bật dịch vụ Auto Kiểm Tra Bình – Minh trong mục Trợ năng.\n\n2) Mở ứng dụng kiểm tra bình.\n\n3) Trên bảng nổi, bấm THIẾT LẬP rồi kéo P1 vào nút TẤT CẢ BÌNH THƯỜNG và P2 vào nút LƯU KẾT QUẢ TUẦN TRA.\n\n4) Bấm THỬ P1 và THỬ P2.\n\n5) Nhập số vòng hoặc chọn chạy không giới hạn, sau đó bấm BẮT ĐẦU.\n\n6) Khi đổi sang ứng dụng khác, tắt màn hình hoặc xoay màn hình, chương trình sẽ tự tạm dừng/dừng để tránh nhấn nhầm."
+            android:textColor="@color/text_dark"
+            android:textSize="17sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="Ứng dụng không yêu cầu Internet, không quảng cáo và không gửi dữ liệu ra ngoài."
+            android:textColor="@color/success"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</ScrollView>
