@@ -1,8 +1,11 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="brand_blue">#1558D6</color>
-    <color name="brand_deep">#073B8C</color>
-    <color name="brand_teal">#22D3B6</color>
-    <color name="surface">#F5F8FF</color>
-    <color name="text_primary">#10213D</color>
+    <color name="primary">#0B5ED7</color>
+    <color name="primary_dark">#073B86</color>
+    <color name="panel_bg">#F4F7FB</color>
+    <color name="panel_stroke">#6C7A89</color>
+    <color name="danger">#C62828</color>
+    <color name="success">#1B5E20</color>
+    <color name="text_dark">#17202A</color>
+    <color name="marker_p1">#D32F2F</color>
+    <color name="marker_p2">#1976D2</color>
 </resources>

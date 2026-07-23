@@ -1,1 +1,1 @@
-# ML Cún Cưng v1.0 - no custom shrinking rules required.
+# Ứng dụng nội bộ; phiên bản 1.0 chưa bật rút gọn mã.
