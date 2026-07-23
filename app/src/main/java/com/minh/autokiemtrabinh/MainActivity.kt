@@ -57,7 +57,8 @@ class MainActivity : AppCompatActivity() {
         val enabled = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
             .any { info ->
                 val serviceInfo = info.resolveInfo?.serviceInfo
-                serviceInfo?.packageName == packageName && serviceInfo.name.endsWith("AutoAccessibilityService")
+                serviceInfo?.packageName == packageName &&
+                    serviceInfo?.name?.endsWith("AutoAccessibilityService") == true
             }
 
         if (enabled) {
