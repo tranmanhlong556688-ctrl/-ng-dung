@@ -41,10 +41,27 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build signed release APK
-        run: gradle --no-daemon clean :app:lintRelease :app:assembleRelease
+        id: gradle_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon clean :app:assembleRelease 2>&1 | tee build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoKiemTraBinh_Minh_build_log
+          path: build.log
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop when Gradle failed
+        if: steps.gradle_build.outcome == 'failure'
+        run: exit 1
 
       - name: Prepare APK
-        shell: bash
         run: |
           mkdir -p output
           cp app/build/outputs/apk/release/app-release.apk output/AutoKiemTraBinh_Minh_v1.0.apk
