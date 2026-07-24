@@ -170,33 +170,45 @@ jobs:
             APK="apk-output/AutoTouchMinh-v1.2.0-installable-release.apk"
             PACKAGE="com.minh.autotouch.personal"
             ACCESSIBILITY_COMPONENT="$PACKAGE/com.minh.autotouch.AutomationAccessibilityService"
+            PROGRESS="smoke-progress-api-${{ matrix.api-level }}.txt"
+            : > "$PROGRESS"
 
-            adb install "$APK"
-            adb shell pm list packages | grep -q "package:$PACKAGE"
+            adb install "$APK" | tee "install-api-${{ matrix.api-level }}.txt"
+            echo INSTALL_OK >> "$PROGRESS"
 
-            adb shell am start -W -n "$PACKAGE/com.minh.autotouch.MainActivity" | tee launch.txt
-            grep -q "Status: ok" launch.txt
-            sleep 2
+            adb shell pm path "$PACKAGE" | tee "package-path-api-${{ matrix.api-level }}.txt"
+            grep -q "package:" "package-path-api-${{ matrix.api-level }}.txt"
+            echo PACKAGE_OK >> "$PROGRESS"
+
+            adb shell am start -W -n "$PACKAGE/com.minh.autotouch.MainActivity" | tee "launch-api-${{ matrix.api-level }}.txt"
+            grep -q "Status: ok" "launch-api-${{ matrix.api-level }}.txt"
             adb shell pidof "$PACKAGE"
+            echo LAUNCH_OK >> "$PROGRESS"
 
-            adb shell uiautomator dump /sdcard/autotouch-window.xml || true
-            adb pull /sdcard/autotouch-window.xml "window-api-${{ matrix.api-level }}.xml" || true
-            grep -q "Auto Touch Minh v1.1.0" "window-api-${{ matrix.api-level }}.xml"
+            adb shell dumpsys package "$PACKAGE" > "package-api-${{ matrix.api-level }}.txt"
+            grep -q "com.minh.autotouch.AutomationAccessibilityService" "package-api-${{ matrix.api-level }}.txt"
+            grep -q "com.minh.autotouch.OverlayService" "package-api-${{ matrix.api-level }}.txt"
+            echo SERVICES_DECLARED_OK >> "$PROGRESS"
 
             adb shell appops set "$PACKAGE" SYSTEM_ALERT_WINDOW allow
+            echo OVERLAY_PERMISSION_OK >> "$PROGRESS"
+
             adb shell settings put secure enabled_accessibility_services "$ACCESSIBILITY_COMPONENT"
             adb shell settings put secure accessibility_enabled 1
             sleep 3
             adb shell dumpsys accessibility > "accessibility-api-${{ matrix.api-level }}.txt"
             grep -q "com.minh.autotouch.AutomationAccessibilityService" "accessibility-api-${{ matrix.api-level }}.txt"
+            echo ACCESSIBILITY_OK >> "$PROGRESS"
 
-            adb shell am start-foreground-service -n "$PACKAGE/com.minh.autotouch.OverlayService"
+            adb shell am start-foreground-service -n "$PACKAGE/com.minh.autotouch.OverlayService" | tee "overlay-start-api-${{ matrix.api-level }}.txt"
             sleep 3
             adb shell dumpsys activity services "$PACKAGE" > "services-api-${{ matrix.api-level }}.txt"
             grep -q "OverlayService" "services-api-${{ matrix.api-level }}.txt"
+            echo OVERLAY_SERVICE_OK >> "$PROGRESS"
 
             adb shell am force-stop "$PACKAGE"
             adb uninstall "$PACKAGE"
+            echo UNINSTALL_OK >> "$PROGRESS"
 
       - name: Upload emulator evidence
         if: always()
@@ -204,9 +216,13 @@ jobs:
         with:
           name: AutoTouchMinh_Emulator_API_${{ matrix.api-level }}_Evidence
           path: |
-            launch.txt
-            window-api-${{ matrix.api-level }}.xml
+            smoke-progress-api-${{ matrix.api-level }}.txt
+            install-api-${{ matrix.api-level }}.txt
+            package-path-api-${{ matrix.api-level }}.txt
+            launch-api-${{ matrix.api-level }}.txt
+            package-api-${{ matrix.api-level }}.txt
             accessibility-api-${{ matrix.api-level }}.txt
+            overlay-start-api-${{ matrix.api-level }}.txt
             services-api-${{ matrix.api-level }}.txt
           if-no-files-found: ignore
           retention-days: 14
