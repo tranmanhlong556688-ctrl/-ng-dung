@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Auto Touch Minh – Redmi Lite</string>
+    <string name="accessibility_service_name">Auto Touch Minh Redmi Lite</string>
+    <string name="accessibility_service_description">Chỉ thực hiện các lần chạm tại tối đa ba tọa độ do người dùng tự đặt trong ứng dụng đã chọn. Không đọc nội dung màn hình, không dùng cửa sổ nổi, không chạy dịch vụ nền và không gửi dữ liệu.</string>
+</resources>
