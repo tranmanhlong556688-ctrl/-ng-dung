@@ -13,11 +13,7 @@ enum class ActionType(val label: String) {
     SWIPE_LEFT("Vuốt trái"),
     SWIPE_RIGHT("Vuốt phải"),
     SWIPE_CUSTOM("Vuốt đến tọa độ đích"),
-    WAIT("Chờ"),
-    BACK("Phím Quay lại"),
-    HOME("Phím Home"),
-    RECENTS("Ứng dụng gần đây"),
-    NOTIFICATIONS("Mở thông báo")
+    WAIT("Chờ")
 }
 
 data class StepConfig(
@@ -38,22 +34,31 @@ data class StepConfig(
         put("enabled", enabled)
         put("name", name)
         put("action", action.name)
-        put("x", x); put("y", y); put("endX", endX); put("endY", endY)
+        put("x", x)
+        put("y", y)
+        put("endX", endX)
+        put("endY", endY)
         put("repeatCount", repeatCount)
-        put("preDelayMs", preDelayMs); put("intervalMs", intervalMs)
-        put("durationMs", durationMs); put("postDelayMs", postDelayMs)
+        put("preDelayMs", preDelayMs)
+        put("intervalMs", intervalMs)
+        put("durationMs", durationMs)
+        put("postDelayMs", postDelayMs)
     }
 
     companion object {
         fun fromJson(o: JSONObject): StepConfig = StepConfig(
             enabled = o.optBoolean("enabled", false),
             name = o.optString("name", ""),
-            action = runCatching { ActionType.valueOf(o.optString("action", "TAP")) }.getOrDefault(ActionType.TAP),
-            x = o.optInt("x", 300), y = o.optInt("y", 500),
-            endX = o.optInt("endX", 300), endY = o.optInt("endY", 200),
-            repeatCount = o.optInt("repeatCount", 1).coerceIn(1, 999),
+            action = runCatching {
+                ActionType.valueOf(o.optString("action", "TAP"))
+            }.getOrDefault(ActionType.TAP),
+            x = o.optInt("x", 300),
+            y = o.optInt("y", 500),
+            endX = o.optInt("endX", 300),
+            endY = o.optInt("endY", 200),
+            repeatCount = o.optInt("repeatCount", 1).coerceIn(1, 100),
             preDelayMs = o.optLong("preDelayMs", 300).coerceAtLeast(0),
-            intervalMs = o.optLong("intervalMs", 250).coerceAtLeast(80),
+            intervalMs = o.optLong("intervalMs", 250).coerceAtLeast(120),
             durationMs = o.optLong("durationMs", 500).coerceIn(50, 60_000),
             postDelayMs = o.optLong("postDelayMs", 300).coerceAtLeast(0)
         )
@@ -62,7 +67,8 @@ data class StepConfig(
 
 data class AppConfig(
     var profileName: String = "Cấu hình mặc định",
-    var loopCount: Int = 0,
+    var allowedPackagesRaw: String = "",
+    var loopCount: Int = 1,
     var loopDelayMs: Long = 500,
     var countdownSec: Int = 3,
     var markerSizeDp: Int = 46,
@@ -77,9 +83,16 @@ data class AppConfig(
         )
     }
 ) {
+    fun allowedPackages(): Set<String> = allowedPackagesRaw
+        .split(',', ';', '\n', ' ')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .toSet()
+
     fun toJson(): JSONObject = JSONObject().apply {
-        put("version", 1)
+        put("version", 2)
         put("profileName", profileName)
+        put("allowedPackagesRaw", allowedPackagesRaw)
         put("loopCount", loopCount)
         put("loopDelayMs", loopDelayMs)
         put("countdownSec", countdownSec)
@@ -93,11 +106,13 @@ data class AppConfig(
 
     companion object {
         fun fromJson(o: JSONObject): AppConfig {
+            val importedLoopCount = o.optInt("loopCount", 1)
             val config = AppConfig(
                 profileName = o.optString("profileName", "Cấu hình mặc định"),
-                loopCount = o.optInt("loopCount", 0).coerceAtLeast(0),
-                loopDelayMs = o.optLong("loopDelayMs", 500).coerceAtLeast(0),
-                countdownSec = o.optInt("countdownSec", 3).coerceIn(0, 30),
+                allowedPackagesRaw = o.optString("allowedPackagesRaw", ""),
+                loopCount = if (importedLoopCount <= 0) 1 else importedLoopCount.coerceIn(1, 999),
+                loopDelayMs = o.optLong("loopDelayMs", 500).coerceAtLeast(200),
+                countdownSec = o.optInt("countdownSec", 3).coerceIn(1, 30),
                 markerSizeDp = o.optInt("markerSizeDp", 46).coerceIn(28, 90),
                 markerAlphaPercent = o.optInt("markerAlphaPercent", 80).coerceIn(20, 100),
                 markersLocked = o.optBoolean("markersLocked", false),
@@ -105,7 +120,10 @@ data class AppConfig(
             )
             val arr = o.optJSONArray("steps") ?: JSONArray()
             for (i in 0 until 10) {
-                config.steps.add(if (i < arr.length()) StepConfig.fromJson(arr.getJSONObject(i)) else StepConfig(name = "Điểm ${i + 1}"))
+                config.steps.add(
+                    if (i < arr.length()) StepConfig.fromJson(arr.getJSONObject(i))
+                    else StepConfig(name = "Điểm ${i + 1}")
+                )
             }
             return config
         }
