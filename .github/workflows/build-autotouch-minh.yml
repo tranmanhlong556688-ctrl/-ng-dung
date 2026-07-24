@@ -1,4 +1,4 @@
-name: Build and Emulator Test Auto Touch Minh v1.2
+name: Build and Emulator Test Auto Touch Minh v1.2.1
 
 on:
   workflow_dispatch:
@@ -41,13 +41,13 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Restore stable signing key
+      - name: Restore transition signing key
         uses: actions/cache@v4
         with:
           path: ${{ env.KEYSTORE_PATH }}
           key: autotouch-minh-personal-signing-v1
 
-      - name: Create signing key when missing
+      - name: Create transition signing key when missing
         shell: bash
         run: |
           mkdir -p "$(dirname "$KEYSTORE_PATH")"
@@ -61,7 +61,7 @@ jobs:
               -dname "CN=Auto Touch Minh Personal, OU=Personal Automation, O=Minh, L=Vietnam, C=VN"
           fi
 
-      - name: Lint and build signed APKs
+      - name: Lint and build all signed release stages
         id: gradle_build
         continue-on-error: true
         working-directory: AutoTouchMinh
@@ -73,13 +73,17 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          gradle --no-daemon --stacktrace clean lintDebug assembleDebug assembleRelease 2>&1 | tee build.log
+          gradle --no-daemon --stacktrace clean \
+            lintProductionRelease \
+            assembleBaselineRelease \
+            assembleProductionRelease \
+            :installtest:assembleRelease 2>&1 | tee build.log
 
       - name: Upload diagnostic build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: AutoTouchMinh_v1.2.0_Diagnostic_Build_Log
+          name: AutoTouchMinh_v1.2.1_Diagnostic_Build_Log
           path: AutoTouchMinh/build.log
           if-no-files-found: warn
           retention-days: 30
@@ -88,46 +92,49 @@ jobs:
         if: steps.gradle_build.outcome == 'failure'
         run: exit 1
 
-      - name: Verify APK signatures
+      - name: Verify signatures and APK metadata
         working-directory: AutoTouchMinh
         shell: bash
         run: |
+          set -euxo pipefail
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          test -x "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk | tee signature-debug.txt
-          "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk | tee signature-release.txt
-          grep -q "Verified using v2 scheme" signature-release.txt
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          BASELINE='app/build/outputs/apk/baseline/release/app-baseline-release.apk'
+          FINAL='app/build/outputs/apk/production/release/app-production-release.apk'
+          INSTALL_TEST='installtest/build/outputs/apk/release/installtest-release.apk'
+          test -x "$APKSIGNER" && test -x "$AAPT"
+          for apk in "$BASELINE" "$FINAL" "$INSTALL_TEST"; do test -s "$apk"; done
+          "$APKSIGNER" verify --verbose --print-certs "$BASELINE" | tee signature-baseline.txt
+          "$APKSIGNER" verify --verbose --print-certs "$FINAL" | tee signature-final.txt
+          "$APKSIGNER" verify --verbose --print-certs "$INSTALL_TEST" | tee signature-installation-test.txt
+          grep -q 'Verified using v2 scheme' signature-final.txt
+          grep -q 'Verified using v3 scheme' signature-final.txt
+          "$AAPT" dump badging "$BASELINE" | tee badging-baseline.txt
+          "$AAPT" dump badging "$FINAL" | tee badging-final.txt
+          "$AAPT" dump badging "$INSTALL_TEST" | tee badging-installation-test.txt
+          grep -q "package: name='com.minh.autotouch.personal' versionCode='3' versionName='1.2.0'" badging-baseline.txt
+          grep -q "package: name='com.minh.autotouch.personal' versionCode='4' versionName='1.2.1'" badging-final.txt
+          grep -q "package: name='com.minh.autotouch.installtest'" badging-installation-test.txt
 
       - name: Prepare deliverables
         working-directory: AutoTouchMinh
+        shell: bash
         run: |
-          mkdir -p output
-          cp app/build/outputs/apk/debug/app-debug.apk output/AutoTouchMinh-v1.2.0-debug.apk
-          cp app/build/outputs/apk/release/app-release.apk output/AutoTouchMinh-v1.2.0-installable-release.apk
+          set -euxo pipefail
+          mkdir -p output/evidence
+          cp app/build/outputs/apk/baseline/release/app-baseline-release.apk output/AutoTouchMinh-v1.2.0-baseline-release.apk
+          cp app/build/outputs/apk/production/release/app-production-release.apk output/AutoTouchMinh-v1.2.1-Xiaomi-Redmi10-release.apk
+          cp installtest/build/outputs/apk/release/installtest-release.apk output/AutoTouchMinh-Installation-Test-v1.0.0.apk
+          cp build.log signature-*.txt badging-*.txt output/evidence/
           sha256sum output/*.apk > output/SHA256SUMS.txt
-          zip -qr output/AutoTouchMinh-v1.2.0-source.zip . \
-            -x 'app/build/*' '.gradle/*' '.ci/*' 'output/*' 'build.log' 'signature-*.txt'
+          zip -qr output/AutoTouchMinh-v1.2.1-source.zip . \
+            -x 'app/build/*' 'installtest/build/*' '.gradle/*' '.ci/*' 'output/*' 'build.log' 'signature-*.txt' 'badging-*.txt'
 
-      - name: Upload installable APKs
+      - name: Upload APK and source deliverables
         uses: actions/upload-artifact@v4
         with:
-          name: AutoTouchMinh_v1.2.0_Installable_APKs
-          path: |
-            AutoTouchMinh/output/AutoTouchMinh-v1.2.0-debug.apk
-            AutoTouchMinh/output/AutoTouchMinh-v1.2.0-installable-release.apk
-            AutoTouchMinh/output/SHA256SUMS.txt
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload source and build evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: AutoTouchMinh_v1.2.0_Source_and_Build_Evidence
-          path: |
-            AutoTouchMinh/output/AutoTouchMinh-v1.2.0-source.zip
-            AutoTouchMinh/build.log
-            AutoTouchMinh/signature-debug.txt
-            AutoTouchMinh/signature-release.txt
+          name: AutoTouchMinh_v1.2.1_Deliverables
+          path: AutoTouchMinh/output/
           if-no-files-found: error
           retention-days: 30
 
@@ -135,13 +142,13 @@ jobs:
     needs: build
     runs-on: macos-13
     steps:
-      - name: Download release APK
+      - name: Download APK deliverables
         uses: actions/download-artifact@v4
         with:
-          name: AutoTouchMinh_v1.2.0_Installable_APKs
+          name: AutoTouchMinh_v1.2.1_Deliverables
           path: apk-output
 
-      - name: Android 11 emulator install and launch test
+      - name: Android 11 installation, launch, update and reinstall tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
@@ -152,53 +159,94 @@ jobs:
           emulator-options: -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect
           script: |
             set -euxo pipefail
-            APK='apk-output/AutoTouchMinh-v1.2.0-installable-release.apk'
+            BASELINE='apk-output/AutoTouchMinh-v1.2.0-baseline-release.apk'
+            FINAL='apk-output/AutoTouchMinh-v1.2.1-Xiaomi-Redmi10-release.apk'
+            INSTALL_TEST='apk-output/AutoTouchMinh-Installation-Test-v1.0.0.apk'
             PACKAGE='com.minh.autotouch.personal'
             ACTIVITY="$PACKAGE/com.minh.autotouch.MainActivity"
+            TEST_PACKAGE='com.minh.autotouch.installtest'
+            TEST_ACTIVITY="$TEST_PACKAGE/com.minh.autotouch.installtest.MainActivity"
             mkdir -p emulator-evidence
-            PROGRESS='emulator-evidence/result.txt'
-            echo EMULATOR_ANDROID_11_BOOT_OK > "$PROGRESS"
+            RESULT='emulator-evidence/result.txt'
+            echo 'ANDROID_11_API_30_BOOT_OK' > "$RESULT"
+            adb shell getprop ro.build.version.release > emulator-evidence/android-version.txt
+            adb shell getprop ro.build.version.sdk > emulator-evidence/android-api.txt
 
-            adb install "$APK" | tee emulator-evidence/install.txt
-            grep -q 'Success' emulator-evidence/install.txt
-            echo INSTALL_OK >> "$PROGRESS"
+            adb install "$INSTALL_TEST" | tee emulator-evidence/install-installation-test.txt
+            grep -q 'Success' emulator-evidence/install-installation-test.txt
+            adb logcat -c
+            adb shell am start -W -n "$TEST_ACTIVITY" | tee emulator-evidence/launch-installation-test.txt
+            grep -q 'Status: ok' emulator-evidence/launch-installation-test.txt
+            sleep 10
+            adb shell pidof "$TEST_PACKAGE" | tee emulator-evidence/pid-installation-test.txt
+            test -s emulator-evidence/pid-installation-test.txt
+            adb exec-out screencap -p > emulator-evidence/screenshot-installation-test.png
+            adb logcat -d -v threadtime > emulator-evidence/logcat-installation-test.txt
+            ! grep -q 'FATAL EXCEPTION' emulator-evidence/logcat-installation-test.txt
+            adb uninstall "$TEST_PACKAGE" | tee emulator-evidence/uninstall-installation-test.txt
+            grep -q 'Success' emulator-evidence/uninstall-installation-test.txt
+            echo 'INSTALLATION_TEST_OK' >> "$RESULT"
 
-            adb shell pm path "$PACKAGE" | tee emulator-evidence/package-path.txt
-            grep -q 'package:' emulator-evidence/package-path.txt
-            echo PACKAGE_OK >> "$PROGRESS"
+            adb install "$BASELINE" | tee emulator-evidence/install-baseline.txt
+            grep -q 'Success' emulator-evidence/install-baseline.txt
+            adb shell dumpsys package "$PACKAGE" > emulator-evidence/package-baseline.txt
+            grep -q 'versionName=1.2.0' emulator-evidence/package-baseline.txt
+            echo 'BASELINE_INSTALL_OK' >> "$RESULT"
 
-            adb shell dumpsys package "$PACKAGE" > emulator-evidence/package.txt
-            grep -q 'versionName=1.2.0' emulator-evidence/package.txt
-            echo VERSION_OK >> "$PROGRESS"
+            adb install -r "$FINAL" | tee emulator-evidence/update-to-final.txt
+            grep -q 'Success' emulator-evidence/update-to-final.txt
+            adb shell dumpsys package "$PACKAGE" > emulator-evidence/package-final.txt
+            grep -q 'versionName=1.2.1' emulator-evidence/package-final.txt
+            echo 'SAME_SIGNATURE_UPDATE_OK' >> "$RESULT"
 
             adb logcat -c
-            adb shell am start -W -n "$ACTIVITY" | tee emulator-evidence/launch.txt
-            grep -q 'Status: ok' emulator-evidence/launch.txt
+            adb shell am start -W -n "$ACTIVITY" | tee emulator-evidence/launch-final.txt
+            grep -q 'Status: ok' emulator-evidence/launch-final.txt
             sleep 10
-            adb shell pidof "$PACKAGE" | tee emulator-evidence/pid.txt
-            test -s emulator-evidence/pid.txt
-            echo LAUNCH_AND_PROCESS_OK >> "$PROGRESS"
-
-            adb logcat -d -v brief > emulator-evidence/logcat.txt
-            if grep -q 'FATAL EXCEPTION' emulator-evidence/logcat.txt; then
-              echo 'FATAL EXCEPTION detected' >&2
-              exit 1
-            fi
+            adb shell pidof "$PACKAGE" | tee emulator-evidence/pid-final.txt
+            test -s emulator-evidence/pid-final.txt
+            adb exec-out screencap -p > emulator-evidence/screenshot-final.png
+            adb logcat -d -v threadtime > emulator-evidence/logcat-final.txt
+            ! grep -q 'FATAL EXCEPTION' emulator-evidence/logcat-final.txt
+            echo 'FINAL_LAUNCH_10S_OK' >> "$RESULT"
 
             adb shell am force-stop "$PACKAGE"
-            adb shell am start -W -n "$ACTIVITY" | tee emulator-evidence/relaunch.txt
-            grep -q 'Status: ok' emulator-evidence/relaunch.txt
+            adb shell am start -W -n "$ACTIVITY" | tee emulator-evidence/relaunch-final.txt
+            grep -q 'Status: ok' emulator-evidence/relaunch-final.txt
             sleep 3
+            adb shell pidof "$PACKAGE" | tee emulator-evidence/pid-relaunch.txt
+            test -s emulator-evidence/pid-relaunch.txt
+            echo 'FINAL_RELAUNCH_OK' >> "$RESULT"
 
-            adb uninstall "$PACKAGE" | tee emulator-evidence/uninstall.txt
-            grep -q 'Success' emulator-evidence/uninstall.txt
-            echo UNINSTALL_OK >> "$PROGRESS"
+            adb uninstall "$PACKAGE" | tee emulator-evidence/uninstall-final.txt
+            grep -q 'Success' emulator-evidence/uninstall-final.txt
+            adb install "$FINAL" | tee emulator-evidence/reinstall-final.txt
+            grep -q 'Success' emulator-evidence/reinstall-final.txt
+            adb shell pm path "$PACKAGE" | tee emulator-evidence/package-path-final.txt
+            grep -q 'package:' emulator-evidence/package-path-final.txt
+            echo 'FINAL_UNINSTALL_REINSTALL_OK' >> "$RESULT"
+
+            cat > emulator-evidence/TEST_REPORT.md <<'REPORT'
+            # Android Emulator Test Report
+
+            Environment: Android 11 / API 30 / x86_64 / Google APIs / Pixel 2 profile.
+
+            Tests performed:
+            - Installed and opened the permission-free Installation Test APK for at least 10 seconds.
+            - Installed full app baseline 1.2.0.
+            - Updated in place to full app 1.2.1 using the same package and signing certificate.
+            - Opened MainActivity for at least 10 seconds and checked for FATAL EXCEPTION.
+            - Force-stopped and opened MainActivity again.
+            - Uninstalled and reinstalled the final APK.
+            - Accessibility was not force-enabled by ADB.
+            - Overlay permission was not bypassed by ADB.
+            REPORT
 
       - name: Upload Android 11 emulator evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: AutoTouchMinh_Android11_Emulator_Evidence
+          name: AutoTouchMinh_v1.2.1_Android11_Emulator_Evidence
           path: emulator-evidence/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
