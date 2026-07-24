@@ -3,36 +3,55 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val ciKeystorePath = System.getenv("AUTOTOUCH_KEYSTORE_PATH")
-val ciStorePassword = System.getenv("AUTOTOUCH_STORE_PASSWORD") ?: ""
-val ciKeyAlias = System.getenv("AUTOTOUCH_KEY_ALIAS") ?: ""
-val ciKeyPassword = System.getenv("AUTOTOUCH_KEY_PASSWORD") ?: ""
+val releaseKeystorePath = System.getenv("AUTOTOUCH_KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("AUTOTOUCH_STORE_PASSWORD")
+val releaseKeyAlias = System.getenv("AUTOTOUCH_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("AUTOTOUCH_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { !it.isNullOrBlank() }
 
 android {
     namespace = "com.minh.autotouch"
     compileSdk = 35
 
     defaultConfig {
-        // Mã gói mới để tránh xung đột chữ ký với các APK thử nghiệm cũ.
         applicationId = "com.minh.autotouch.personal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.2.1"
     }
 
     signingConfigs {
-        if (!ciKeystorePath.isNullOrBlank()) {
-            create("personalTest") {
-                storeFile = file(ciKeystorePath)
-                storePassword = ciStorePassword
-                keyAlias = ciKeyAlias
-                keyPassword = ciKeyPassword
+        if (hasReleaseSigning) {
+            create("releaseKey") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true
                 enableV4Signing = true
             }
+        }
+    }
+
+    flavorDimensions += "releaseTrack"
+    productFlavors {
+        create("baseline") {
+            dimension = "releaseTrack"
+            versionCode = 3
+            versionName = "1.2.0"
+        }
+        create("production") {
+            dimension = "releaseTrack"
+            versionCode = 4
+            versionName = "1.2.1"
         }
     }
 
@@ -44,11 +63,8 @@ android {
         release {
             isDebuggable = false
             isMinifyEnabled = false
-            signingConfig = if (!ciKeystorePath.isNullOrBlank()) {
-                signingConfigs.getByName("personalTest")
-            } else {
-                // Build thủ công vẫn tạo APK thử nghiệm có chữ ký và cài được.
-                signingConfigs.getByName("debug")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("releaseKey")
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -61,7 +77,16 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlinOptions { jvmTarget = "17" }
+}
+
+// Release artifacts must never silently fall back to the Android debug key.
+gradle.taskGraph.whenReady {
+    val releaseRequested = allTasks.any { it.name.contains("Release", ignoreCase = true) }
+    if (releaseRequested && !hasReleaseSigning) {
+        throw GradleException(
+            "Release signing is missing. Set AUTOTOUCH_KEYSTORE_PATH, " +
+                "AUTOTOUCH_STORE_PASSWORD, AUTOTOUCH_KEY_ALIAS and AUTOTOUCH_KEY_PASSWORD."
+        )
     }
 }
