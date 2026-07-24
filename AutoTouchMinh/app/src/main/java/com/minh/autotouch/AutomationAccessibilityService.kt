@@ -7,14 +7,14 @@ import android.content.Context
 import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
-import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 
 class AutomationAccessibilityService : AccessibilityService() {
     enum class RunState { IDLE, COUNTDOWN, RUNNING, PAUSED }
 
     companion object {
-        @Volatile var instance: AutomationAccessibilityService? = null
+        @Volatile
+        var instance: AutomationAccessibilityService? = null
             private set
     }
 
@@ -24,7 +24,7 @@ class AutomationAccessibilityService : AccessibilityService() {
     private var stepIndex = 0
     private var repeatIndex = 0
     private var state = RunState.IDLE
-    private var volumePresses = mutableListOf<Long>()
+    private var currentPackage: String? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -33,7 +33,16 @@ class AutomationAccessibilityService : AccessibilityService() {
         LogStore.append(this, "ACCESSIBILITY_CONNECTED")
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        val packageName = event?.packageName?.toString()?.takeIf { it.isNotBlank() } ?: return
+        currentPackage = packageName
+        if (state == RunState.RUNNING || state == RunState.COUNTDOWN) {
+            if (!isCurrentPackageAllowed()) {
+                stopAutomation("Đã chuyển khỏi ứng dụng được phép")
+            }
+        }
+    }
+
     override fun onInterrupt() = stopAutomation("Dịch vụ trợ năng bị gián đoạn")
 
     override fun onDestroy() {
@@ -46,8 +55,20 @@ class AutomationAccessibilityService : AccessibilityService() {
     fun isPaused(): Boolean = state == RunState.PAUSED
 
     fun startAutomation(newConfig: AppConfig) {
+        if (!ConsentStore.isAccepted(this)) {
+            OverlayService.postStatus("Chưa đồng ý thông báo sử dụng Trợ năng")
+            return
+        }
         if (state != RunState.IDLE) stopAutomation("Khởi động lại")
         config = newConfig.deepCopy()
+        if (config.allowedPackages().isEmpty()) {
+            OverlayService.postStatus("Chưa chọn ứng dụng được phép")
+            return
+        }
+        if (!isCurrentPackageAllowed()) {
+            OverlayService.postStatus("Hãy mở đúng ứng dụng được phép rồi nhấn chạy")
+            return
+        }
         if (config.steps.none { it.enabled }) {
             OverlayService.postStatus("Chưa bật điểm thao tác nào")
             return
@@ -57,12 +78,16 @@ class AutomationAccessibilityService : AccessibilityService() {
         repeatIndex = 0
         state = RunState.COUNTDOWN
         OverlayService.setMarkersTouchable(false)
-        LogStore.append(this, "START", config.profileName)
-        runCountdown(config.countdownSec)
+        LogStore.append(this, "START", "profile=${config.profileName},package=$currentPackage")
+        runCountdown(config.countdownSec.coerceAtLeast(1))
     }
 
     private fun runCountdown(seconds: Int) {
         if (state != RunState.COUNTDOWN) return
+        if (!isCurrentPackageAllowed()) {
+            stopAutomation("Ứng dụng hiện tại không được phép")
+            return
+        }
         if (seconds <= 0) {
             state = RunState.RUNNING
             OverlayService.postStatus("Đang chạy vòng 1")
@@ -84,6 +109,10 @@ class AutomationAccessibilityService : AccessibilityService() {
 
     fun resumeAutomation() {
         if (state == RunState.PAUSED) {
+            if (!isCurrentPackageAllowed()) {
+                OverlayService.postStatus("Hãy mở lại ứng dụng được phép")
+                return
+            }
             state = RunState.RUNNING
             OverlayService.postStatus("Tiếp tục")
             LogStore.append(this, "RESUME")
@@ -100,6 +129,11 @@ class AutomationAccessibilityService : AccessibilityService() {
         LogStore.append(this, "STOP", reason)
     }
 
+    private fun isCurrentPackageAllowed(): Boolean {
+        val activePackage = currentPackage ?: return false
+        return activePackage in config.allowedPackages()
+    }
+
     private fun runNextStep() {
         if (state != RunState.RUNNING) return
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
@@ -107,18 +141,22 @@ class AutomationAccessibilityService : AccessibilityService() {
             stopAutomation("Màn hình đang khóa")
             return
         }
+        if (!isCurrentPackageAllowed()) {
+            stopAutomation("Đã chuyển khỏi ứng dụng được phép")
+            return
+        }
 
         while (stepIndex < config.steps.size && !config.steps[stepIndex].enabled) stepIndex++
         if (stepIndex >= config.steps.size) {
             loopIndex++
-            if (config.loopCount > 0 && loopIndex >= config.loopCount) {
-                stopAutomation("Đã đủ ${config.loopCount} vòng")
+            if (loopIndex >= config.loopCount.coerceIn(1, 999)) {
+                stopAutomation("Đã đủ ${config.loopCount.coerceIn(1, 999)} vòng")
                 return
             }
             stepIndex = 0
             repeatIndex = 0
             OverlayService.postStatus("Đang chạy vòng ${loopIndex + 1}")
-            handler.postDelayed({ runNextStep() }, config.loopDelayMs)
+            handler.postDelayed({ runNextStep() }, config.loopDelayMs.coerceAtLeast(200))
             return
         }
 
@@ -131,9 +169,13 @@ class AutomationAccessibilityService : AccessibilityService() {
 
     private fun executeRepeated(step: StepConfig) {
         if (state != RunState.RUNNING) return
+        if (!isCurrentPackageAllowed()) {
+            stopAutomation("Đã chuyển khỏi ứng dụng được phép")
+            return
+        }
         val targetRepeats = when (step.action) {
             ActionType.DOUBLE_TAP -> 2
-            ActionType.MULTI_TAP, ActionType.TAP -> step.repeatCount.coerceAtLeast(1)
+            ActionType.MULTI_TAP, ActionType.TAP -> step.repeatCount.coerceIn(1, 100)
             else -> 1
         }
         executeAction(step) { success ->
@@ -144,7 +186,7 @@ class AutomationAccessibilityService : AccessibilityService() {
             }
             repeatIndex++
             if (repeatIndex < targetRepeats) {
-                handler.postDelayed({ executeRepeated(step) }, step.intervalMs.coerceAtLeast(80))
+                handler.postDelayed({ executeRepeated(step) }, step.intervalMs.coerceAtLeast(120))
             } else {
                 LogStore.append(this, "STEP_OK", "point=${stepIndex + 1},action=${step.action.name}")
                 stepIndex++
@@ -164,10 +206,6 @@ class AutomationAccessibilityService : AccessibilityService() {
             ActionType.SWIPE_RIGHT -> gestureSwipe(step.x, step.y, step.x + 400, step.y, step.durationMs, done)
             ActionType.SWIPE_CUSTOM -> gestureSwipe(step.x, step.y, step.endX, step.endY, step.durationMs, done)
             ActionType.WAIT -> handler.postDelayed({ done(true) }, step.durationMs)
-            ActionType.BACK -> done(performGlobalAction(GLOBAL_ACTION_BACK))
-            ActionType.HOME -> done(performGlobalAction(GLOBAL_ACTION_HOME))
-            ActionType.RECENTS -> done(performGlobalAction(GLOBAL_ACTION_RECENTS))
-            ActionType.NOTIFICATIONS -> done(performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS))
         }
     }
 
@@ -185,6 +223,10 @@ class AutomationAccessibilityService : AccessibilityService() {
     }
 
     private fun dispatch(path: Path, duration: Long, done: (Boolean) -> Unit) {
+        if (!isCurrentPackageAllowed()) {
+            done(false)
+            return
+        }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, duration.coerceAtLeast(1)))
             .build()
@@ -193,18 +235,5 @@ class AutomationAccessibilityService : AccessibilityService() {
             override fun onCancelled(gestureDescription: GestureDescription?) = done(false)
         }, handler)
         if (!accepted) done(false)
-    }
-
-    override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            val now = System.currentTimeMillis()
-            volumePresses.add(now)
-            volumePresses = volumePresses.filter { now - it <= 1500 }.toMutableList()
-            if (volumePresses.size >= 3) {
-                volumePresses.clear()
-                stopAutomation("Dừng khẩn cấp bằng phím âm lượng")
-            }
-        }
-        return false
     }
 }
