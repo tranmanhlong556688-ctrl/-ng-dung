@@ -7,6 +7,10 @@ on:
     paths:
       - 'AutoTouchMinh/**'
       - '.github/workflows/build-autotouch-minh.yml'
+  pull_request:
+    paths:
+      - 'AutoTouchMinh/**'
+      - '.github/workflows/build-autotouch-minh.yml'
 
 permissions:
   contents: read
