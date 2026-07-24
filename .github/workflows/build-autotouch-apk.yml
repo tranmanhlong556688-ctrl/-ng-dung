@@ -3,15 +3,10 @@ name: Build AutoTouch Minh APK
 on:
   workflow_dispatch:
   push:
-    branches: [auto-touch-v1]
+    branches: [ auto-touch-v1 ]
     paths:
       - 'AutoTouchMinh/**'
-      - '.github/workflows/build-apk.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'AutoTouchMinh/**'
-      - '.github/workflows/build-apk.yml'
+      - '.github/workflows/build-autotouch-apk.yml'
 
 permissions:
   contents: read
@@ -19,7 +14,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -41,11 +35,11 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build AutoTouch debug APK
+      - name: Build debug APK
         working-directory: AutoTouchMinh
         run: gradle --no-daemon clean :app:assembleDebug --stacktrace
 
-      - name: Prepare APK
+      - name: Rename APK
         run: |
           mkdir -p output
           cp AutoTouchMinh/app/build/outputs/apk/debug/app-debug.apk output/AutoTouchMinh_v1.0.0-debug.apk

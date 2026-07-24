@@ -1,0 +1,83 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Auto Touch Minh v1.0.0"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Tạo tối đa 10 điểm nổi. Các điểm bật sẽ chạy theo thứ tự tăng dần và lặp lại." />
+
+        <Button
+            android:id="@+id/btnOverlayPermission"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="1. Cấp quyền hiển thị nổi" />
+
+        <Button
+            android:id="@+id/btnAccessibility"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="2. Bật dịch vụ trợ năng" />
+
+        <Button
+            android:id="@+id/btnStartOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="3. Hiện bảng điều khiển nổi" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Cấu hình chung"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/edtLoops"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Số vòng (0 = liên tục)"
+            android:inputType="number"
+            android:text="0" />
+
+        <EditText
+            android:id="@+id/edtBetweenCycles"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Chờ giữa hai vòng (ms)"
+            android:inputType="number"
+            android:text="500" />
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Lưu cấu hình" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Chạm vào số điểm nổi để mở cài đặt riêng: bật/tắt, kiểu thao tác, số lần, thời gian chờ và hướng vuốt. Kéo điểm đến vị trí cần thao tác." />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Lưu ý an toàn: không dùng trên màn hình khóa, ứng dụng ngân hàng, mật khẩu hoặc nơi bị cấm tự động hóa." />
+    </LinearLayout>
+</ScrollView>
