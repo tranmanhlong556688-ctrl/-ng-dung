@@ -106,7 +106,7 @@ jobs:
           grep -q 'Verified using v2 scheme' redmi-lite-signature.txt
           "$AAPT" dump badging "$APK" | tee redmi-lite-badging.txt
           grep -q "package: name='com.minh.autotouch.redmilite' versionCode='1' versionName='1.3.0-redmi-lite'" redmi-lite-badging.txt
-          grep -q "targetSdkVersion:'32'" redmi-lite-badging.txt
+          grep -q "targetSdkVersion:'33'" redmi-lite-badging.txt
 
       - name: Prepare Redmi Lite deliverables
         working-directory: AutoTouchMinh
