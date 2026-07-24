@@ -67,6 +67,8 @@ jobs:
           fi
 
       - name: Build Redmi Lite release APK
+        id: lite_build
+        continue-on-error: true
         working-directory: AutoTouchMinh
         env:
           AUTOTOUCH_KEYSTORE_PATH: ${{ github.workspace }}/${{ env.KEYSTORE_PATH }}
@@ -77,6 +79,19 @@ jobs:
         run: |
           set -o pipefail
           gradle --no-daemon --stacktrace clean :redmilite:lintRelease :redmilite:assembleRelease 2>&1 | tee redmi-lite-build.log
+
+      - name: Upload Redmi Lite diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoTouchMinh_v1.3.0_Redmi_Lite_Diagnostic_Log
+          path: AutoTouchMinh/redmi-lite-build.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Stop when Redmi Lite build failed
+        if: steps.lite_build.outcome == 'failure'
+        run: exit 1
 
       - name: Verify signature and package metadata
         working-directory: AutoTouchMinh
