@@ -159,17 +159,22 @@ jobs:
           name: AutoTouchMinh_v1.2.1_Deliverables
           path: apk-output
 
+      - name: Prepare emulator evidence folder
+        run: |
+          mkdir -p emulator-evidence
+          echo 'EMULATOR_JOB_STARTED' > emulator-evidence/environment-stage.txt
+
       - name: Android 11 installation, launch, update and reinstall tests
+        id: emulator_test
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
-          target: google_apis
+          target: aosp_atd
           arch: x86_64
-          profile: pixel_2
-          ram-size: 2048M
-          disk-size: 4096M
+          emulator-boot-timeout: 900
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
             set -euxo pipefail
             BASELINE='apk-output/AutoTouchMinh-v1.2.0-baseline-release.apk'
@@ -179,7 +184,6 @@ jobs:
             ACTIVITY="$PACKAGE/com.minh.autotouch.MainActivity"
             TEST_PACKAGE='com.minh.autotouch.installtest'
             TEST_ACTIVITY="$TEST_PACKAGE/com.minh.autotouch.installtest.MainActivity"
-            mkdir -p emulator-evidence
             RESULT='emulator-evidence/result.txt'
             echo 'ANDROID_11_API_30_BOOT_OK' > "$RESULT"
             adb shell getprop ro.build.version.release > emulator-evidence/android-version.txt
@@ -242,7 +246,7 @@ jobs:
             cat > emulator-evidence/TEST_REPORT.md <<'REPORT'
             # Android Emulator Test Report
 
-            Environment: Android 11 / API 30 / x86_64 / Google APIs / Pixel 2 profile.
+            Environment: Android 11 / API 30 / x86_64 / AOSP ATD.
 
             Tests performed:
             - Installed and opened the permission-free Installation Test APK for at least 10 seconds.
@@ -255,6 +259,10 @@ jobs:
             - Overlay permission was not bypassed by ADB.
             REPORT
 
+      - name: Record emulator action outcome
+        if: always()
+        run: echo '${{ steps.emulator_test.outcome }}' > emulator-evidence/emulator-action-outcome.txt
+
       - name: Upload Android 11 emulator evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -263,3 +271,7 @@ jobs:
           path: emulator-evidence/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Fail when emulator test failed
+        if: steps.emulator_test.outcome == 'failure'
+        run: exit 1
