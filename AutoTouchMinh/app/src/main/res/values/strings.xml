@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Auto Touch Minh</string>
+    <string name="accessibility_service_description">Thực hiện thao tác cảm ứng do người dùng cấu hình. Không đọc hoặc lưu mật khẩu.</string>
+</resources>
