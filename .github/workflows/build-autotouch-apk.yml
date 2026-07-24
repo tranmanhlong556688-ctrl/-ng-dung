@@ -1,0 +1,53 @@
+name: Build AutoTouch Minh APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ auto-touch-v1 ]
+    paths:
+      - 'AutoTouchMinh/**'
+      - '.github/workflows/build-autotouch-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build debug APK
+        working-directory: AutoTouchMinh
+        run: gradle --no-daemon clean :app:assembleDebug --stacktrace
+
+      - name: Rename APK
+        run: |
+          mkdir -p output
+          cp AutoTouchMinh/app/build/outputs/apk/debug/app-debug.apk output/AutoTouchMinh_v1.0.0-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoTouchMinh-v1.0.0-debug-APK
+          path: output/AutoTouchMinh_v1.0.0-debug.apk
+          if-no-files-found: error
+          retention-days: 30
