@@ -124,13 +124,13 @@ class LiteAccessibilityService : AccessibilityService() {
 
         val accepted = dispatchGesture(
             gesture,
-            object : GestureResultCallback() {
-                override fun onCompleted(gestureDescription: GestureDescription?) {
+            object : AccessibilityService.GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription) {
                     pointIndex++
                     handler.postDelayed({ runNext() }, config.intervalMs)
                 }
 
-                override fun onCancelled(gestureDescription: GestureDescription?) {
+                override fun onCancelled(gestureDescription: GestureDescription) {
                     stopRun("Android đã hủy thao tác chạm")
                 }
             },
