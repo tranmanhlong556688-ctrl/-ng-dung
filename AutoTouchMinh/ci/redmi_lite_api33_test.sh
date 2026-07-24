@@ -65,7 +65,7 @@ echo 'INSTALL_OK' >> emulator-evidence/result.txt
 
 adb shell dumpsys package "$PACKAGE" > emulator-evidence/package.txt
 grep -q 'versionName=1.3.0-redmi-lite' emulator-evidence/package.txt
-grep -q 'targetSdk=32' emulator-evidence/package.txt
+grep -q 'targetSdk=33' emulator-evidence/package.txt
 echo 'PACKAGE_METADATA_OK' >> emulator-evidence/result.txt
 
 adb logcat -c
