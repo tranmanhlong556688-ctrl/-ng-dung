@@ -1,10 +1,8 @@
 package com.minh.autotouch
 
-import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -20,6 +18,7 @@ import java.io.InputStreamReader
 class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private lateinit var statusText: TextView
+    private lateinit var allowedPackagesEdit: EditText
     private lateinit var config: AppConfig
     private val stepSummaryViews = mutableListOf<TextView>()
 
@@ -31,7 +30,9 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         config = ConfigStore.load(this)
         buildUi()
-        requestNotificationPermissionIfNeeded()
+        if (!ConsentStore.isAccepted(this)) {
+            root.post { showAccessibilityDisclosure(openSettingsAfter = false) }
+        }
     }
 
     override fun onResume() {
@@ -50,13 +51,13 @@ class MainActivity : Activity() {
         setContentView(scroll)
 
         root.addView(TextView(this).apply {
-            text = "Auto Touch Minh v1.0.0"
-            textSize = 24f
+            text = "Auto Touch Minh v1.1.0 – Chế độ an toàn"
+            textSize = 23f
             setTextColor(Color.rgb(13, 71, 161))
             setPadding(0, 0, 0, dp(8))
         })
         root.addView(TextView(this).apply {
-            text = "Tự động thao tác theo 1–10 điểm. Chỉ dùng trên thiết bị và ứng dụng bạn có quyền sử dụng; không dùng trên màn hình khóa, ứng dụng ngân hàng hoặc màn hình nhập mật khẩu."
+            text = "Ứng dụng chỉ chạy kịch bản cố định do bạn tự tạo, trong đúng ứng dụng bạn cho phép. Không đọc chữ trên màn hình, không ghi mật khẩu và không gửi dữ liệu ra mạng."
             textSize = 14f
             setTextColor(Color.DKGRAY)
             setPadding(0, 0, 0, dp(10))
@@ -69,18 +70,38 @@ class MainActivity : Activity() {
         }
         root.addView(statusText, fullWidth())
 
-        root.addView(sectionTitle("1. Quyền cần thiết"))
+        root.addView(sectionTitle("1. Thông báo quyền và cài đặt Android"))
+        root.addView(TextView(this).apply {
+            text = "Quyền Trợ năng được dùng duy nhất để thực hiện nhấp, nhấn giữ và vuốt tại tọa độ bạn đã đặt. Dịch vụ chỉ nhận tên gói ứng dụng đang mở để ngăn thao tác chạy sang ứng dụng khác. Bạn có thể tắt quyền bất cứ lúc nào trong Cài đặt Android."
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setBackgroundColor(Color.rgb(255, 248, 225))
+        }, fullWidth())
+
         val permissionRow = horizontalWrap()
         permissionRow.addView(button("Cấp quyền nổi") { openOverlayPermission() })
-        permissionRow.addView(button("Bật trợ năng") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
-        permissionRow.addView(button("Cài đặt pin") { openBatterySettings() })
+        permissionRow.addView(button("Đọc và bật Trợ năng") { showAccessibilityDisclosure(true) })
+        permissionRow.addView(button("Nếu Android chặn") { showRestrictedSettingsHelp() })
         root.addView(permissionRow)
 
-        root.addView(sectionTitle("2. Cấu hình chu trình"))
+        root.addView(sectionTitle("2. Chỉ định ứng dụng được phép"))
+        root.addView(TextView(this).apply {
+            text = "Bắt buộc chọn ít nhất một ứng dụng. Auto Touch sẽ dừng ngay khi màn hình chuyển sang ứng dụng khác."
+            setTextColor(Color.DKGRAY)
+        })
+        allowedPackagesEdit = edit(config.allowedPackagesRaw, false).apply {
+            hint = "Ví dụ: com.congty.ungdung"
+        }
+        root.addView(allowedPackagesEdit, fullWidth())
+        val appRow = horizontalWrap()
+        appRow.addView(button("Chọn ứng dụng") { showAppPicker() })
+        appRow.addView(button("Xóa danh sách") { allowedPackagesEdit.setText("") })
+        root.addView(appRow)
+
+        root.addView(sectionTitle("3. Cấu hình chu trình"))
         val profileField = labeledEdit("Tên cấu hình", config.profileName, false)
-        val loopField = labeledEdit("Số vòng (0 = liên tục)", config.loopCount.toString(), true)
-        val loopDelayField = labeledEdit("Chờ giữa vòng (ms)", config.loopDelayMs.toString(), true)
-        val countdownField = labeledEdit("Đếm ngược (giây)", config.countdownSec.toString(), true)
+        val loopField = labeledEdit("Số vòng (1–999)", config.loopCount.toString(), true)
+        val loopDelayField = labeledEdit("Chờ giữa vòng (ms, tối thiểu 200)", config.loopDelayMs.toString(), true)
+        val countdownField = labeledEdit("Đếm ngược (giây, tối thiểu 1)", config.countdownSec.toString(), true)
         val markerSizeField = labeledEdit("Kích thước điểm (dp)", config.markerSizeDp.toString(), true)
         val alphaField = labeledEdit("Độ rõ điểm (20–100%)", config.markerAlphaPercent.toString(), true)
 
@@ -93,9 +114,10 @@ class MainActivity : Activity() {
 
         root.addView(button("Lưu cài đặt chung") {
             config.profileName = profileField.second.text.toString().ifBlank { "Cấu hình mặc định" }
-            config.loopCount = loopField.second.intValue(0).coerceAtLeast(0)
-            config.loopDelayMs = loopDelayField.second.longValue(500).coerceAtLeast(0)
-            config.countdownSec = countdownField.second.intValue(3).coerceIn(0, 30)
+            config.allowedPackagesRaw = allowedPackagesEdit.text.toString().trim()
+            config.loopCount = loopField.second.intValue(1).coerceIn(1, 999)
+            config.loopDelayMs = loopDelayField.second.longValue(500).coerceAtLeast(200)
+            config.countdownSec = countdownField.second.intValue(3).coerceIn(1, 30)
             config.markerSizeDp = markerSizeField.second.intValue(46).coerceIn(28, 90)
             config.markerAlphaPercent = alphaField.second.intValue(80).coerceIn(20, 100)
             ConfigStore.save(this, config)
@@ -103,22 +125,22 @@ class MainActivity : Activity() {
             refreshOverlay()
         }, fullWidth())
 
-        root.addView(sectionTitle("3. Các điểm thao tác"))
+        root.addView(sectionTitle("4. Các điểm thao tác"))
         for (i in 0 until 10) root.addView(createStepRow(i))
 
-        root.addView(sectionTitle("4. Điều khiển"))
+        root.addView(sectionTitle("5. Điều khiển"))
         val controlRow = horizontalWrap()
         controlRow.addView(button("Hiện điểm nổi") { startOverlay() })
         controlRow.addView(button("Nạp lại điểm") { refreshOverlay() })
         controlRow.addView(button("Tắt điểm nổi") { stopService(Intent(this, OverlayService::class.java)) })
         root.addView(controlRow)
         root.addView(TextView(this).apply {
-            text = "Dừng khẩn cấp: bấm nút ■ trên bảng nổi hoặc bấm phím Giảm âm lượng 3 lần trong 1,5 giây."
+            text = "Dừng khẩn cấp: bấm nút ■ trên bảng điều khiển nổi. Ứng dụng cũng tự dừng khi khóa màn hình hoặc chuyển khỏi ứng dụng được phép."
             setPadding(0, dp(6), 0, dp(8))
             setTextColor(Color.rgb(170, 0, 0))
         })
 
-        root.addView(sectionTitle("5. Sao lưu và nhật ký"))
+        root.addView(sectionTitle("6. Sao lưu và nhật ký"))
         val ioRow = horizontalWrap()
         ioRow.addView(button("Xuất JSON") { exportConfig() })
         ioRow.addView(button("Nhập JSON") { importConfig() })
@@ -130,9 +152,9 @@ class MainActivity : Activity() {
         })
         root.addView(ioRow)
 
-        root.addView(sectionTitle("6. Hướng dẫn nhanh"))
+        root.addView(sectionTitle("7. Hướng dẫn nhanh"))
         root.addView(TextView(this).apply {
-            text = "1) Cấp quyền hiển thị nổi.\n2) Bật Dịch vụ trợ năng Auto Touch Minh.\n3) Bật các điểm cần dùng và chỉnh thao tác.\n4) Nhấn Hiện điểm nổi, kéo từng điểm đến vị trí cần thao tác.\n5) Nhấn ▶ để chạy, Ⅱ để tạm dừng, ■ để dừng.\n\nTrên Xiaomi/Redmi: vào Pin > Không hạn chế; bật Tự khởi động nếu máy thường tự tắt dịch vụ."
+            text = "1) Chọn ứng dụng được phép và lưu cài đặt.\n2) Cấp quyền hiển thị nổi.\n3) Đọc thông báo và tự bật Dịch vụ trợ năng.\n4) Bật các điểm cần dùng, kéo chúng đến vị trí cần thao tác.\n5) Mở ứng dụng đã chọn rồi nhấn ▶.\n\nAndroid 13 trở lên: nếu mục Trợ năng bị làm mờ, mở Thông tin ứng dụng > dấu ba chấm > Cho phép cài đặt bị hạn chế. Đây là bước bảo vệ bắt buộc của Android đối với ứng dụng cài ngoài cửa hàng.\n\nXiaomi/Redmi: đặt Pin thành Không hạn chế và chỉ bật Tự khởi động khi thật sự cần."
             textSize = 15f
             setLineSpacing(0f, 1.15f)
         })
@@ -187,21 +209,21 @@ class MainActivity : Activity() {
         val spinner = Spinner(this)
         val labels = ActionType.values().map { it.label }
         spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-        spinner.setSelection(step.action.ordinal)
+        spinner.setSelection(step.action.ordinal.coerceIn(0, ActionType.values().lastIndex))
         box.addView(spinner)
 
         val x = field(box, "Tọa độ X", step.x)
         val y = field(box, "Tọa độ Y", step.y)
         val endX = field(box, "Tọa độ đích X (vuốt tùy chỉnh)", step.endX)
         val endY = field(box, "Tọa độ đích Y (vuốt tùy chỉnh)", step.endY)
-        val repeat = field(box, "Số lần nhấp", step.repeatCount)
+        val repeat = field(box, "Số lần nhấp (1–100)", step.repeatCount)
         val pre = field(box, "Chờ trước thao tác (ms)", step.preDelayMs)
-        val interval = field(box, "Khoảng cách giữa lần nhấp (ms, tối thiểu 80)", step.intervalMs)
+        val interval = field(box, "Khoảng cách giữa lần nhấp (ms, tối thiểu 120)", step.intervalMs)
         val duration = field(box, "Thời gian nhấn/vuốt/chờ (ms)", step.durationMs)
         val post = field(box, "Chờ sau thao tác (ms)", step.postDelayMs)
 
         box.addView(TextView(this).apply {
-            text = "Mẹo: tọa độ X/Y sẽ tự cập nhật khi bạn kéo điểm nổi trên màn hình. Mở lại bảng này để xem giá trị mới."
+            text = "Tọa độ X/Y tự cập nhật khi bạn kéo điểm nổi."
             setTextColor(Color.DKGRAY)
             setPadding(0, dp(8), 0, 0)
         })
@@ -216,14 +238,96 @@ class MainActivity : Activity() {
                 step.y = y.intValue(step.y).coerceAtLeast(0)
                 step.endX = endX.intValue(step.endX).coerceAtLeast(0)
                 step.endY = endY.intValue(step.endY).coerceAtLeast(0)
-                step.repeatCount = repeat.intValue(1).coerceIn(1, 999)
+                step.repeatCount = repeat.intValue(1).coerceIn(1, 100)
                 step.preDelayMs = pre.longValue(300).coerceAtLeast(0)
-                step.intervalMs = interval.longValue(250).coerceAtLeast(80)
+                step.intervalMs = interval.longValue(250).coerceAtLeast(120)
                 step.durationMs = duration.longValue(500).coerceIn(50, 60_000)
                 step.postDelayMs = post.longValue(300).coerceAtLeast(0)
                 ConfigStore.save(this, config)
                 refreshStepSummaries()
                 refreshOverlay()
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun showAccessibilityDisclosure(openSettingsAfter: Boolean) {
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(8))
+        }
+        content.addView(TextView(this).apply {
+            text = "Auto Touch Minh sử dụng Android AccessibilityService để thực hiện đúng các nhấp và vuốt bạn đã cài đặt. Dịch vụ nhận tên gói ứng dụng đang mở để chỉ cho phép chạy trong danh sách bạn chọn. Ứng dụng không đọc nội dung cửa sổ, không thu thập mật khẩu, không tự đưa ra quyết định và không chia sẻ dữ liệu. Tất cả cấu hình và nhật ký được lưu cục bộ. Bạn có thể dừng hoặc tắt quyền bất cứ lúc nào."
+            textSize = 15f
+        })
+        val checkbox = CheckBox(this).apply {
+            text = "Tôi đã đọc, hiểu và đồng ý bật quyền này"
+            setPadding(0, dp(12), 0, 0)
+            isChecked = ConsentStore.isAccepted(this@MainActivity)
+        }
+        content.addView(checkbox)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Thông báo sử dụng quyền Trợ năng")
+            .setView(content)
+            .setPositiveButton("Đồng ý", null)
+            .setNegativeButton("Để sau", null)
+            .create()
+        dialog.setOnShowListener {
+            val accept = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            accept.isEnabled = checkbox.isChecked
+            checkbox.setOnCheckedChangeListener { _, checked -> accept.isEnabled = checked }
+            accept.setOnClickListener {
+                ConsentStore.setAccepted(this, true)
+                dialog.dismiss()
+                refreshStatus()
+                if (openSettingsAfter) startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        }
+        dialog.show()
+    }
+
+    private fun showRestrictedSettingsHelp() {
+        AlertDialog.Builder(this)
+            .setTitle("Khi Android chặn quyền Trợ năng")
+            .setMessage("Trên Android 13 trở lên, ứng dụng cài từ file APK có thể bị khóa mục Trợ năng. Hãy mở Thông tin ứng dụng Auto Touch Minh, bấm dấu ba chấm ở góc trên và chọn ‘Cho phép cài đặt bị hạn chế’. Sau đó quay lại và tự bật Dịch vụ trợ năng. Không tắt Play Protect và không dùng công cụ vượt bảo vệ.")
+            .setPositiveButton("Mở thông tin ứng dụng") { _, _ ->
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            }
+            .setNegativeButton("Đóng", null)
+            .show()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun showAppPicker() {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val entries = packageManager.queryIntentActivities(intent, 0)
+            .map { info ->
+                val label = info.loadLabel(packageManager).toString()
+                val pkg = info.activityInfo.packageName
+                Triple(label, pkg, "$label\n$pkg")
+            }
+            .filter { it.second != packageName }
+            .distinctBy { it.second }
+            .sortedBy { it.first.lowercase() }
+
+        if (entries.isEmpty()) {
+            toast("Không tìm thấy ứng dụng có biểu tượng khởi chạy")
+            return
+        }
+        val labels = entries.map { it.third }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Chọn ứng dụng được phép")
+            .setItems(labels) { _, which ->
+                val selected = entries[which].second
+                val current = allowedPackagesEdit.text.toString()
+                    .split(',', ';', '\n', ' ')
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .toMutableSet()
+                current.add(selected)
+                allowedPackagesEdit.setText(current.joinToString(", "))
+                toast("Đã thêm $selected")
             }
             .setNegativeButton("Hủy", null)
             .show()
@@ -240,11 +344,20 @@ class MainActivity : Activity() {
     private fun refreshStatus() {
         val overlay = Settings.canDrawOverlays(this)
         val accessibility = AutomationAccessibilityService.instance != null
-        statusText.text = "Quyền nổi: ${if (overlay) "Đã cấp" else "Chưa cấp"}   |   Trợ năng: ${if (accessibility) "Đã bật" else "Chưa bật"}"
+        val consent = ConsentStore.isAccepted(this)
+        statusText.text = "Quyền nổi: ${if (overlay) "Đã cấp" else "Chưa cấp"}   |   Trợ năng: ${if (accessibility) "Đã bật" else "Chưa bật"}   |   Đồng ý: ${if (consent) "Có" else "Chưa"}"
     }
 
     private fun startOverlay() {
         config = ConfigStore.load(this)
+        if (!ConsentStore.isAccepted(this)) {
+            showAccessibilityDisclosure(false)
+            return
+        }
+        if (config.allowedPackages().isEmpty()) {
+            toast("Hãy chọn ứng dụng được phép và bấm Lưu cài đặt chung")
+            return
+        }
         if (!Settings.canDrawOverlays(this)) {
             openOverlayPermission()
             return
@@ -262,11 +375,6 @@ class MainActivity : Activity() {
 
     private fun openOverlayPermission() {
         startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-    }
-
-    private fun openBatterySettings() {
-        runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
-            .onFailure { startActivity(Intent(Settings.ACTION_SETTINGS)) }
     }
 
     private fun exportConfig() {
@@ -314,12 +422,6 @@ class MainActivity : Activity() {
             requestExportLog -> runCatching {
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(LogStore.read(this)) }
             }.onSuccess { toast("Đã xuất nhật ký") }.onFailure { toast("Lỗi xuất log: ${it.message}") }
-        }
-    }
-
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 301)
         }
     }
 

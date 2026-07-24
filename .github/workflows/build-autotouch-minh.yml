@@ -1,9 +1,9 @@
-name: Build Auto Touch Minh APK
+name: Build Auto Touch Minh Safe APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [agent/autotouch-minh-v1]
+    branches: [agent/autotouch-minh-v1-1-compliant]
     paths:
       - 'AutoTouchMinh/**'
       - '.github/workflows/build-autotouch-minh.yml'
@@ -37,19 +37,19 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build debug APK
+      - name: Lint and build APKs
         id: gradle_build
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
-          gradle --no-daemon clean assembleDebug 2>&1 | tee build.log
+          gradle --no-daemon clean lintDebug assembleDebug assembleRelease 2>&1 | tee build.log
 
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: AutoTouchMinh_build_log
+          name: AutoTouchMinh_v1.1.0_build_log
           path: AutoTouchMinh/build.log
           if-no-files-found: error
           retention-days: 14
@@ -61,21 +61,24 @@ jobs:
       - name: Prepare deliverables
         run: |
           mkdir -p output
-          cp app/build/outputs/apk/debug/app-debug.apk output/AutoTouchMinh-v1.0.0-debug.apk
-          zip -qr output/AutoTouchMinh-v1.0.0-source.zip . -x 'app/build/*' '.gradle/*' 'output/*' 'build.log'
+          cp app/build/outputs/apk/debug/app-debug.apk output/AutoTouchMinh-v1.1.0-safe-debug.apk
+          cp app/build/outputs/apk/release/app-release.apk output/AutoTouchMinh-v1.1.0-safe-release.apk
+          zip -qr output/AutoTouchMinh-v1.1.0-safe-source.zip . -x 'app/build/*' '.gradle/*' 'output/*' 'build.log'
 
-      - name: Upload APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: AutoTouchMinh_v1.0.0_APK
-          path: AutoTouchMinh/output/AutoTouchMinh-v1.0.0-debug.apk
+          name: AutoTouchMinh_v1.1.0_Safe_APK
+          path: |
+            AutoTouchMinh/output/AutoTouchMinh-v1.1.0-safe-debug.apk
+            AutoTouchMinh/output/AutoTouchMinh-v1.1.0-safe-release.apk
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload source
         uses: actions/upload-artifact@v4
         with:
-          name: AutoTouchMinh_v1.0.0_Source
-          path: AutoTouchMinh/output/AutoTouchMinh-v1.0.0-source.zip
+          name: AutoTouchMinh_v1.1.0_Safe_Source
+          path: AutoTouchMinh/output/AutoTouchMinh-v1.1.0-safe-source.zip
           if-no-files-found: error
           retention-days: 30

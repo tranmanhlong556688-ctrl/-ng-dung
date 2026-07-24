@@ -3,6 +3,8 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="100"
     android:canPerformGestures="true"
-    android:canRequestFilterKeyEvents="true"
-    android:accessibilityFlags="flagRequestFilterKeyEvents"
+    android:canRetrieveWindowContent="false"
+    android:isAccessibilityTool="false"
+    android:settingsActivity="com.minh.autotouch.MainActivity"
+    android:intro="@string/accessibility_service_intro"
     android:description="@string/accessibility_service_description" />
