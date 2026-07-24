@@ -142,6 +142,15 @@ jobs:
       matrix:
         api-level: [33, 35]
     steps:
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Enable KVM acceleration
         shell: bash
         run: |
@@ -156,61 +165,84 @@ jobs:
           name: AutoTouchMinh_v1.2.0_Installable_APKs
           path: apk-output
 
-      - name: Boot emulator and test installation/services
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ matrix.api-level }}
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            set -euxo pipefail
-            APK="apk-output/AutoTouchMinh-v1.2.0-installable-release.apk"
-            PACKAGE="com.minh.autotouch.personal"
-            ACCESSIBILITY_COMPONENT="$PACKAGE/com.minh.autotouch.AutomationAccessibilityService"
-            EVIDENCE_DIR="$GITHUB_WORKSPACE/emulator-evidence-api-${{ matrix.api-level }}"
-            mkdir -p "$EVIDENCE_DIR"
-            PROGRESS="$EVIDENCE_DIR/smoke-progress.txt"
-            : > "$PROGRESS"
+      - name: Install and boot Android emulator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          API="${{ matrix.api-level }}"
+          IMAGE="system-images;android-${API};google_apis;x86_64"
+          AVD_NAME="autotouch-${API}"
+          EVIDENCE_DIR="$GITHUB_WORKSPACE/emulator-evidence-api-${API}"
+          mkdir -p "$EVIDENCE_DIR"
 
-            adb install "$APK" | tee "$EVIDENCE_DIR/install.txt"
-            echo INSTALL_OK >> "$PROGRESS"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "emulator" "$IMAGE"
+          echo "no" | avdmanager create avd --force --name "$AVD_NAME" --package "$IMAGE" --device "pixel_6"
 
-            adb shell pm path "$PACKAGE" | tee "$EVIDENCE_DIR/package-path.txt"
-            grep -q "package:" "$EVIDENCE_DIR/package-path.txt"
-            echo PACKAGE_OK >> "$PROGRESS"
+          nohup "$ANDROID_HOME/emulator/emulator" \
+            -avd "$AVD_NAME" -no-window -noaudio -no-boot-anim \
+            -gpu swiftshader_indirect -accel on -no-snapshot -wipe-data \
+            > "$EVIDENCE_DIR/emulator.log" 2>&1 &
 
-            adb shell am start -W -n "$PACKAGE/com.minh.autotouch.MainActivity" | tee "$EVIDENCE_DIR/launch.txt"
-            grep -q "Status: ok" "$EVIDENCE_DIR/launch.txt"
-            adb shell pidof "$PACKAGE"
-            echo LAUNCH_OK >> "$PROGRESS"
+          adb wait-for-device
+          BOOTED=""
+          for i in $(seq 1 120); do
+            BOOTED="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+            if [ "$BOOTED" = "1" ]; then break; fi
+            sleep 5
+          done
+          test "$BOOTED" = "1"
+          adb shell input keyevent 82 || true
+          adb devices -l | tee "$EVIDENCE_DIR/adb-devices.txt"
+          echo EMULATOR_BOOT_OK > "$EVIDENCE_DIR/smoke-progress.txt"
 
-            adb shell dumpsys package "$PACKAGE" > "$EVIDENCE_DIR/package.txt"
-            grep -q "com.minh.autotouch.AutomationAccessibilityService" "$EVIDENCE_DIR/package.txt"
-            grep -q "com.minh.autotouch.OverlayService" "$EVIDENCE_DIR/package.txt"
-            echo SERVICES_DECLARED_OK >> "$PROGRESS"
+      - name: Install APK and test core services
+        shell: bash
+        run: |
+          set -euxo pipefail
+          API="${{ matrix.api-level }}"
+          APK="apk-output/AutoTouchMinh-v1.2.0-installable-release.apk"
+          PACKAGE="com.minh.autotouch.personal"
+          ACCESSIBILITY_COMPONENT="$PACKAGE/com.minh.autotouch.AutomationAccessibilityService"
+          EVIDENCE_DIR="$GITHUB_WORKSPACE/emulator-evidence-api-${API}"
+          PROGRESS="$EVIDENCE_DIR/smoke-progress.txt"
 
-            adb shell appops set "$PACKAGE" SYSTEM_ALERT_WINDOW allow
-            echo OVERLAY_PERMISSION_OK >> "$PROGRESS"
+          adb install "$APK" | tee "$EVIDENCE_DIR/install.txt"
+          echo INSTALL_OK >> "$PROGRESS"
 
-            adb shell settings put secure enabled_accessibility_services "$ACCESSIBILITY_COMPONENT"
-            adb shell settings put secure accessibility_enabled 1
-            sleep 3
-            adb shell dumpsys accessibility > "$EVIDENCE_DIR/accessibility.txt"
-            grep -q "com.minh.autotouch.AutomationAccessibilityService" "$EVIDENCE_DIR/accessibility.txt"
-            echo ACCESSIBILITY_OK >> "$PROGRESS"
+          adb shell pm path "$PACKAGE" | tee "$EVIDENCE_DIR/package-path.txt"
+          grep -q "package:" "$EVIDENCE_DIR/package-path.txt"
+          echo PACKAGE_OK >> "$PROGRESS"
 
-            adb shell am start-foreground-service -n "$PACKAGE/com.minh.autotouch.OverlayService" | tee "$EVIDENCE_DIR/overlay-start.txt"
-            sleep 3
-            adb shell dumpsys activity services "$PACKAGE" > "$EVIDENCE_DIR/services.txt"
-            grep -q "OverlayService" "$EVIDENCE_DIR/services.txt"
-            echo OVERLAY_SERVICE_OK >> "$PROGRESS"
+          adb shell am start -W -n "$PACKAGE/com.minh.autotouch.MainActivity" | tee "$EVIDENCE_DIR/launch.txt"
+          grep -q "Status: ok" "$EVIDENCE_DIR/launch.txt"
+          adb shell pidof "$PACKAGE"
+          echo LAUNCH_OK >> "$PROGRESS"
 
-            adb shell am force-stop "$PACKAGE"
-            adb uninstall "$PACKAGE"
-            echo UNINSTALL_OK >> "$PROGRESS"
+          adb shell dumpsys package "$PACKAGE" > "$EVIDENCE_DIR/package.txt"
+          grep -q "com.minh.autotouch.AutomationAccessibilityService" "$EVIDENCE_DIR/package.txt"
+          grep -q "com.minh.autotouch.OverlayService" "$EVIDENCE_DIR/package.txt"
+          echo SERVICES_DECLARED_OK >> "$PROGRESS"
+
+          adb shell appops set "$PACKAGE" SYSTEM_ALERT_WINDOW allow
+          echo OVERLAY_PERMISSION_OK >> "$PROGRESS"
+
+          adb shell settings put secure enabled_accessibility_services "$ACCESSIBILITY_COMPONENT"
+          adb shell settings put secure accessibility_enabled 1
+          sleep 3
+          adb shell dumpsys accessibility > "$EVIDENCE_DIR/accessibility.txt"
+          grep -q "com.minh.autotouch.AutomationAccessibilityService" "$EVIDENCE_DIR/accessibility.txt"
+          echo ACCESSIBILITY_OK >> "$PROGRESS"
+
+          adb shell am start-foreground-service -n "$PACKAGE/com.minh.autotouch.OverlayService" | tee "$EVIDENCE_DIR/overlay-start.txt"
+          sleep 3
+          adb shell dumpsys activity services "$PACKAGE" > "$EVIDENCE_DIR/services.txt"
+          grep -q "OverlayService" "$EVIDENCE_DIR/services.txt"
+          echo OVERLAY_SERVICE_OK >> "$PROGRESS"
+
+          adb shell am force-stop "$PACKAGE"
+          adb uninstall "$PACKAGE"
+          echo UNINSTALL_OK >> "$PROGRESS"
 
       - name: Upload emulator evidence
         if: always()
@@ -220,3 +252,8 @@ jobs:
           path: emulator-evidence-api-${{ matrix.api-level }}/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Stop emulator
+        if: always()
+        shell: bash
+        run: adb emu kill || true
