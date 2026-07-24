@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: autotouch-minh-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   KEYSTORE_PATH: AutoTouchMinh/.ci/autotouch-personal-test.jks
   KEY_ALIAS: autotouch_personal
@@ -140,8 +144,15 @@ jobs:
 
   android11_emulator_install_test:
     needs: build
-    runs-on: macos-13
+    runs-on: ubuntu-latest
     steps:
+      - name: Enable KVM group permissions
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Download APK deliverables
         uses: actions/download-artifact@v4
         with:
@@ -155,8 +166,10 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
+          ram-size: 2048M
+          disk-size: 4096M
           disable-animations: true
-          emulator-options: -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
           script: |
             set -euxo pipefail
             BASELINE='apk-output/AutoTouchMinh-v1.2.0-baseline-release.apk'
