@@ -145,7 +145,11 @@ jobs:
   android11_emulator_install_test:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Enable KVM group permissions
         shell: bash
         run: |
@@ -159,109 +163,133 @@ jobs:
           name: AutoTouchMinh_v1.2.1_Deliverables
           path: apk-output
 
-      - name: Prepare emulator evidence folder
-        run: |
-          mkdir -p emulator-evidence
-          echo 'EMULATOR_JOB_STARTED' > emulator-evidence/environment-stage.txt
-
-      - name: Android 11 installation, launch, update and reinstall tests
+      - name: Manual Android 11 emulator and APK tests
         id: emulator_test
         continue-on-error: true
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          target: aosp_atd
-          arch: x86_64
-          emulator-boot-timeout: 900
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: |
-            set -euxo pipefail
-            BASELINE='apk-output/AutoTouchMinh-v1.2.0-baseline-release.apk'
-            FINAL='apk-output/AutoTouchMinh-v1.2.1-Xiaomi-Redmi10-release.apk'
-            INSTALL_TEST='apk-output/AutoTouchMinh-Installation-Test-v1.0.0.apk'
-            PACKAGE='com.minh.autotouch.personal'
-            ACTIVITY="$PACKAGE/com.minh.autotouch.MainActivity"
-            TEST_PACKAGE='com.minh.autotouch.installtest'
-            TEST_ACTIVITY="$TEST_PACKAGE/com.minh.autotouch.installtest.MainActivity"
-            RESULT='emulator-evidence/result.txt'
-            echo 'ANDROID_11_API_30_BOOT_OK' > "$RESULT"
-            adb shell getprop ro.build.version.release > emulator-evidence/android-version.txt
-            adb shell getprop ro.build.version.sdk > emulator-evidence/android-api.txt
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p emulator-evidence
+          exec > >(tee emulator-evidence/test-console.log) 2>&1
 
-            adb install "$INSTALL_TEST" | tee emulator-evidence/install-installation-test.txt
-            grep -q 'Success' emulator-evidence/install-installation-test.txt
-            adb logcat -c
-            adb shell am start -W -n "$TEST_ACTIVITY" | tee emulator-evidence/launch-installation-test.txt
-            grep -q 'Status: ok' emulator-evidence/launch-installation-test.txt
-            sleep 10
-            adb shell pidof "$TEST_PACKAGE" | tee emulator-evidence/pid-installation-test.txt
-            test -s emulator-evidence/pid-installation-test.txt
-            adb exec-out screencap -p > emulator-evidence/screenshot-installation-test.png
-            adb logcat -d -v threadtime > emulator-evidence/logcat-installation-test.txt
-            ! grep -q 'FATAL EXCEPTION' emulator-evidence/logcat-installation-test.txt
-            adb uninstall "$TEST_PACKAGE" | tee emulator-evidence/uninstall-installation-test.txt
-            grep -q 'Success' emulator-evidence/uninstall-installation-test.txt
-            echo 'INSTALLATION_TEST_OK' >> "$RESULT"
+          BASELINE='apk-output/AutoTouchMinh-v1.2.0-baseline-release.apk'
+          FINAL='apk-output/AutoTouchMinh-v1.2.1-Xiaomi-Redmi10-release.apk'
+          INSTALL_TEST='apk-output/AutoTouchMinh-Installation-Test-v1.0.0.apk'
+          PACKAGE='com.minh.autotouch.personal'
+          ACTIVITY="$PACKAGE/com.minh.autotouch.MainActivity"
+          TEST_PACKAGE='com.minh.autotouch.installtest'
+          TEST_ACTIVITY="$TEST_PACKAGE/com.minh.autotouch.installtest.MainActivity"
+          RESULT='emulator-evidence/result.txt'
+          AVD_NAME='autotouch_api30'
+          IMAGE='system-images;android-30;google_apis;x86_64'
 
-            adb install "$BASELINE" | tee emulator-evidence/install-baseline.txt
-            grep -q 'Success' emulator-evidence/install-baseline.txt
-            adb shell dumpsys package "$PACKAGE" > emulator-evidence/package-baseline.txt
-            grep -q 'versionName=1.2.0' emulator-evidence/package-baseline.txt
-            echo 'BASELINE_INSTALL_OK' >> "$RESULT"
+          cleanup() {
+            adb emu kill || true
+            if [ -n "${EMU_PID:-}" ]; then kill "$EMU_PID" || true; fi
+          }
+          trap cleanup EXIT
 
-            adb install -r "$FINAL" | tee emulator-evidence/update-to-final.txt
-            grep -q 'Success' emulator-evidence/update-to-final.txt
-            adb shell dumpsys package "$PACKAGE" > emulator-evidence/package-final.txt
-            grep -q 'versionName=1.2.1' emulator-evidence/package-final.txt
-            echo 'SAME_SIGNATURE_UPDATE_OK' >> "$RESULT"
+          uname -a > emulator-evidence/runner-uname.txt
+          ls -l /dev/kvm > emulator-evidence/kvm-device.txt 2>&1 || true
+          "$ANDROID_HOME/emulator/emulator" -accel-check > emulator-evidence/accel-check.txt 2>&1 || true
+          yes | sdkmanager --licenses > emulator-evidence/sdk-licenses.txt 2>&1 || true
+          sdkmanager --install platform-tools emulator "$IMAGE" > emulator-evidence/sdk-install.txt 2>&1
+          echo no | avdmanager create avd --force --name "$AVD_NAME" --package "$IMAGE" --device pixel_2 > emulator-evidence/avd-create.txt 2>&1
 
-            adb logcat -c
-            adb shell am start -W -n "$ACTIVITY" | tee emulator-evidence/launch-final.txt
-            grep -q 'Status: ok' emulator-evidence/launch-final.txt
-            sleep 10
-            adb shell pidof "$PACKAGE" | tee emulator-evidence/pid-final.txt
-            test -s emulator-evidence/pid-final.txt
-            adb exec-out screencap -p > emulator-evidence/screenshot-final.png
-            adb logcat -d -v threadtime > emulator-evidence/logcat-final.txt
-            ! grep -q 'FATAL EXCEPTION' emulator-evidence/logcat-final.txt
-            echo 'FINAL_LAUNCH_10S_OK' >> "$RESULT"
+          ACCEL='-accel off'
+          if [ -c /dev/kvm ] && [ -r /dev/kvm ] && [ -w /dev/kvm ]; then ACCEL='-accel on'; fi
+          echo "$ACCEL" > emulator-evidence/acceleration-selected.txt
 
-            adb shell am force-stop "$PACKAGE"
-            adb shell am start -W -n "$ACTIVITY" | tee emulator-evidence/relaunch-final.txt
-            grep -q 'Status: ok' emulator-evidence/relaunch-final.txt
-            sleep 3
-            adb shell pidof "$PACKAGE" | tee emulator-evidence/pid-relaunch.txt
-            test -s emulator-evidence/pid-relaunch.txt
-            echo 'FINAL_RELAUNCH_OK' >> "$RESULT"
+          nohup "$ANDROID_HOME/emulator/emulator" -avd "$AVD_NAME" \
+            $ACCEL -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim \
+            -no-snapshot -wipe-data -camera-back none -camera-front none \
+            > emulator-evidence/emulator.log 2>&1 &
+          EMU_PID=$!
+          echo "$EMU_PID" > emulator-evidence/emulator-pid.txt
 
-            adb uninstall "$PACKAGE" | tee emulator-evidence/uninstall-final.txt
-            grep -q 'Success' emulator-evidence/uninstall-final.txt
-            adb install "$FINAL" | tee emulator-evidence/reinstall-final.txt
-            grep -q 'Success' emulator-evidence/reinstall-final.txt
-            adb shell pm path "$PACKAGE" | tee emulator-evidence/package-path-final.txt
-            grep -q 'package:' emulator-evidence/package-path-final.txt
-            echo 'FINAL_UNINSTALL_REINSTALL_OK' >> "$RESULT"
+          adb start-server
+          BOOTED=0
+          for i in $(seq 1 180); do
+            adb devices -l > emulator-evidence/adb-devices-latest.txt 2>&1 || true
+            if adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '^1$'; then
+              BOOTED=1
+              break
+            fi
+            if ! kill -0 "$EMU_PID" 2>/dev/null; then
+              echo 'Emulator process exited before boot' >&2
+              break
+            fi
+            sleep 5
+          done
+          if [ "$BOOTED" -ne 1 ]; then
+            tail -n 300 emulator-evidence/emulator.log > emulator-evidence/emulator-tail.txt || true
+            exit 31
+          fi
 
-            cat > emulator-evidence/TEST_REPORT.md <<'REPORT'
-            # Android Emulator Test Report
+          echo 'ANDROID_11_API_30_BOOT_OK' > "$RESULT"
+          adb shell getprop ro.build.version.release > emulator-evidence/android-version.txt
+          adb shell getprop ro.build.version.sdk > emulator-evidence/android-api.txt
+          adb shell getprop ro.product.cpu.abi > emulator-evidence/android-abi.txt
 
-            Environment: Android 11 / API 30 / x86_64 / AOSP ATD.
+          adb install "$INSTALL_TEST" | tee emulator-evidence/install-installation-test.txt
+          grep -q 'Success' emulator-evidence/install-installation-test.txt
+          adb logcat -c
+          adb shell am start -W -n "$TEST_ACTIVITY" | tee emulator-evidence/launch-installation-test.txt
+          grep -q 'Status: ok' emulator-evidence/launch-installation-test.txt
+          sleep 10
+          adb shell pidof "$TEST_PACKAGE" | tee emulator-evidence/pid-installation-test.txt
+          test -s emulator-evidence/pid-installation-test.txt
+          adb exec-out screencap -p > emulator-evidence/screenshot-installation-test.png
+          adb logcat -d -v threadtime > emulator-evidence/logcat-installation-test.txt
+          ! grep -q 'FATAL EXCEPTION' emulator-evidence/logcat-installation-test.txt
+          adb uninstall "$TEST_PACKAGE" | tee emulator-evidence/uninstall-installation-test.txt
+          grep -q 'Success' emulator-evidence/uninstall-installation-test.txt
+          echo 'INSTALLATION_TEST_OK' >> "$RESULT"
 
-            Tests performed:
-            - Installed and opened the permission-free Installation Test APK for at least 10 seconds.
-            - Installed full app baseline 1.2.0.
-            - Updated in place to full app 1.2.1 using the same package and signing certificate.
-            - Opened MainActivity for at least 10 seconds and checked for FATAL EXCEPTION.
-            - Force-stopped and opened MainActivity again.
-            - Uninstalled and reinstalled the final APK.
-            - Accessibility was not force-enabled by ADB.
-            - Overlay permission was not bypassed by ADB.
-            REPORT
+          adb install "$BASELINE" | tee emulator-evidence/install-baseline.txt
+          grep -q 'Success' emulator-evidence/install-baseline.txt
+          adb shell dumpsys package "$PACKAGE" > emulator-evidence/package-baseline.txt
+          grep -q 'versionName=1.2.0' emulator-evidence/package-baseline.txt
+          echo 'BASELINE_INSTALL_OK' >> "$RESULT"
 
-      - name: Record emulator action outcome
+          adb install -r "$FINAL" | tee emulator-evidence/update-to-final.txt
+          grep -q 'Success' emulator-evidence/update-to-final.txt
+          adb shell dumpsys package "$PACKAGE" > emulator-evidence/package-final.txt
+          grep -q 'versionName=1.2.1' emulator-evidence/package-final.txt
+          echo 'SAME_SIGNATURE_UPDATE_OK' >> "$RESULT"
+
+          adb logcat -c
+          adb shell am start -W -n "$ACTIVITY" | tee emulator-evidence/launch-final.txt
+          grep -q 'Status: ok' emulator-evidence/launch-final.txt
+          sleep 10
+          adb shell pidof "$PACKAGE" | tee emulator-evidence/pid-final.txt
+          test -s emulator-evidence/pid-final.txt
+          adb exec-out screencap -p > emulator-evidence/screenshot-final.png
+          adb logcat -d -v threadtime > emulator-evidence/logcat-final.txt
+          ! grep -q 'FATAL EXCEPTION' emulator-evidence/logcat-final.txt
+          echo 'FINAL_LAUNCH_10S_OK' >> "$RESULT"
+
+          adb shell am force-stop "$PACKAGE"
+          adb shell am start -W -n "$ACTIVITY" | tee emulator-evidence/relaunch-final.txt
+          grep -q 'Status: ok' emulator-evidence/relaunch-final.txt
+          sleep 3
+          adb shell pidof "$PACKAGE" | tee emulator-evidence/pid-relaunch.txt
+          test -s emulator-evidence/pid-relaunch.txt
+          echo 'FINAL_RELAUNCH_OK' >> "$RESULT"
+
+          adb uninstall "$PACKAGE" | tee emulator-evidence/uninstall-final.txt
+          grep -q 'Success' emulator-evidence/uninstall-final.txt
+          adb install "$FINAL" | tee emulator-evidence/reinstall-final.txt
+          grep -q 'Success' emulator-evidence/reinstall-final.txt
+          adb shell pm path "$PACKAGE" | tee emulator-evidence/package-path-final.txt
+          grep -q 'package:' emulator-evidence/package-path-final.txt
+          echo 'FINAL_UNINSTALL_REINSTALL_OK' >> "$RESULT"
+
+      - name: Record emulator outcome
         if: always()
-        run: echo '${{ steps.emulator_test.outcome }}' > emulator-evidence/emulator-action-outcome.txt
+        run: |
+          mkdir -p emulator-evidence
+          echo '${{ steps.emulator_test.outcome }}' > emulator-evidence/emulator-action-outcome.txt
 
       - name: Upload Android 11 emulator evidence
         if: always()
@@ -272,6 +300,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Fail when emulator test failed
+      - name: Fail when emulator or APK test failed
         if: steps.emulator_test.outcome == 'failure'
         run: exit 1
