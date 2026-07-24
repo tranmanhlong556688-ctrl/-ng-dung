@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Android 11 API 30 release-install regression test for Auto Touch Minh v1.2.1.
 set -euxo pipefail
 
 mkdir -p emulator-evidence
