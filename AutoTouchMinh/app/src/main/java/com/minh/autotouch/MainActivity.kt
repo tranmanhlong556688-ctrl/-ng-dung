@@ -101,12 +101,10 @@ class MainActivity : Activity() {
             ConfigStore.save(this, config)
             toast("Đã lưu cài đặt chung")
             refreshOverlay()
-        }, fullWidth()))
+        }, fullWidth())
 
         root.addView(sectionTitle("3. Các điểm thao tác"))
-        for (i in 0 until 10) {
-            root.addView(createStepRow(i))
-        }
+        for (i in 0 until 10) root.addView(createStepRow(i))
 
         root.addView(sectionTitle("4. Điều khiển"))
         val controlRow = horizontalWrap()
@@ -116,7 +114,8 @@ class MainActivity : Activity() {
         root.addView(controlRow)
         root.addView(TextView(this).apply {
             text = "Dừng khẩn cấp: bấm nút ■ trên bảng nổi hoặc bấm phím Giảm âm lượng 3 lần trong 1,5 giây."
-            setPadding(0, dp(6), 0, dp(8)); setTextColor(Color.rgb(170, 0, 0))
+            setPadding(0, dp(6), 0, dp(8))
+            setTextColor(Color.rgb(170, 0, 0))
         })
 
         root.addView(sectionTitle("5. Sao lưu và nhật ký"))
@@ -145,7 +144,10 @@ class MainActivity : Activity() {
             setPadding(dp(10), dp(8), dp(10), dp(8))
             setBackgroundColor(if (index % 2 == 0) Color.rgb(248, 249, 250) else Color.WHITE)
         }
-        val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
         val enabled = CheckBox(this).apply {
             text = "Điểm ${index + 1}"
             isChecked = config.steps[index].enabled
@@ -159,7 +161,11 @@ class MainActivity : Activity() {
         top.addView(enabled, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         top.addView(button("Chỉnh sửa") { showStepEditor(index) })
         container.addView(top)
-        val summary = TextView(this).apply { setPadding(dp(8), 0, dp(8), dp(6)); textSize = 13f; setTextColor(Color.DKGRAY) }
+        val summary = TextView(this).apply {
+            setPadding(dp(8), 0, dp(8), dp(6))
+            textSize = 13f
+            setTextColor(Color.DKGRAY)
+        }
         stepSummaryViews.add(summary)
         container.addView(summary)
         return container
@@ -168,7 +174,10 @@ class MainActivity : Activity() {
     private fun showStepEditor(index: Int) {
         val step = config.steps[index]
         val scroll = ScrollView(this)
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(6), dp(18), dp(6)) }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(6), dp(18), dp(6))
+        }
         scroll.addView(box)
 
         val name = edit(step.name, false)
@@ -193,7 +202,8 @@ class MainActivity : Activity() {
 
         box.addView(TextView(this).apply {
             text = "Mẹo: tọa độ X/Y sẽ tự cập nhật khi bạn kéo điểm nổi trên màn hình. Mở lại bảng này để xem giá trị mới."
-            setTextColor(Color.DKGRAY); setPadding(0, dp(8), 0, 0)
+            setTextColor(Color.DKGRAY)
+            setPadding(0, dp(8), 0, 0)
         })
 
         AlertDialog.Builder(this)
@@ -236,7 +246,8 @@ class MainActivity : Activity() {
     private fun startOverlay() {
         config = ConfigStore.load(this)
         if (!Settings.canDrawOverlays(this)) {
-            openOverlayPermission(); return
+            openOverlayPermission()
+            return
         }
         val intent = Intent(this, OverlayService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
@@ -250,8 +261,7 @@ class MainActivity : Activity() {
     }
 
     private fun openOverlayPermission() {
-        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-        startActivity(intent)
+        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
     }
 
     private fun openBatterySettings() {
@@ -261,20 +271,23 @@ class MainActivity : Activity() {
 
     private fun exportConfig() {
         startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE); type = "application/json"
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
             putExtra(Intent.EXTRA_TITLE, "AutoTouchMinh_config.json")
         }, requestExportConfig)
     }
 
     private fun importConfig() {
         startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE); type = "application/json"
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
         }, requestImportConfig)
     }
 
     private fun exportLog() {
         startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE); type = "text/csv"
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/csv"
             putExtra(Intent.EXTRA_TITLE, "AutoTouchMinh_log.csv")
         }, requestExportLog)
     }
@@ -294,7 +307,9 @@ class MainActivity : Activity() {
                 } ?: error("Không đọc được file")
                 config = ConfigStore.importText(this, text)
             }.onSuccess {
-                toast("Đã nhập cấu hình"); recreate(); refreshOverlay()
+                toast("Đã nhập cấu hình")
+                recreate()
+                refreshOverlay()
             }.onFailure { toast("File không hợp lệ: ${it.message}") }
             requestExportLog -> runCatching {
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(LogStore.read(this)) }
@@ -309,12 +324,19 @@ class MainActivity : Activity() {
     }
 
     private fun sectionTitle(text: String) = TextView(this).apply {
-        this.text = text; textSize = 18f; setTextColor(Color.rgb(13, 71, 161)); setPadding(0, dp(18), 0, dp(6))
+        this.text = text
+        textSize = 18f
+        setTextColor(Color.rgb(13, 71, 161))
+        setPadding(0, dp(18), 0, dp(6))
     }
 
-    private fun label(text: String) = TextView(this).apply { this.text = text; setPadding(0, dp(8), 0, dp(2)) }
+    private fun label(text: String) = TextView(this).apply {
+        this.text = text
+        setPadding(0, dp(8), 0, dp(2))
+    }
 
-    private fun labeledEdit(label: String, value: String, numeric: Boolean): Pair<TextView, EditText> = Pair(this.label(label), edit(value, numeric))
+    private fun labeledEdit(label: String, value: String, numeric: Boolean): Pair<TextView, EditText> =
+        Pair(this.label(label), edit(value, numeric))
 
     private fun field(parent: LinearLayout, label: String, value: Number): EditText {
         parent.addView(this.label(label))
@@ -327,16 +349,23 @@ class MainActivity : Activity() {
         setSelectAllOnFocus(true)
     }
 
-    private fun button(text: String, onClick: () -> Unit, params: LinearLayout.LayoutParams? = null): Button = Button(this).apply {
-        this.text = text; setOnClickListener { onClick() }
-        params?.let { layoutParams = it }
+    private fun button(text: String, onClick: () -> Unit): Button = Button(this).apply {
+        this.text = text
+        setOnClickListener { onClick() }
     }
 
-    private fun horizontalWrap() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.START }
-    private fun fullWidth() = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    private fun horizontalWrap() = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.START
+    }
+
+    private fun fullWidth() = LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT
+    )
+
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
-
     private fun EditText.intValue(default: Int): Int = text.toString().toIntOrNull() ?: default
     private fun EditText.longValue(default: Long): Long = text.toString().toLongOrNull() ?: default
 }
