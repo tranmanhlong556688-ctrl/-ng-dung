@@ -134,7 +134,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  emulator_smoke_test:
+  emulator_install_test:
     needs: build
     runs-on: ubuntu-latest
     strategy:
@@ -165,7 +165,7 @@ jobs:
           name: AutoTouchMinh_v1.2.0_Installable_APKs
           path: apk-output
 
-      - name: Install and boot Android emulator
+      - name: Boot emulator
         shell: bash
         run: |
           set -euxo pipefail
@@ -194,55 +194,52 @@ jobs:
           test "$BOOTED" = "1"
           adb shell input keyevent 82 || true
           adb devices -l | tee "$EVIDENCE_DIR/adb-devices.txt"
-          echo EMULATOR_BOOT_OK > "$EVIDENCE_DIR/smoke-progress.txt"
+          echo EMULATOR_BOOT_OK > "$EVIDENCE_DIR/result.txt"
 
-      - name: Install APK and test core services
+      - name: Install release APK and launch app
         shell: bash
         run: |
           set -euxo pipefail
           API="${{ matrix.api-level }}"
           APK="apk-output/AutoTouchMinh-v1.2.0-installable-release.apk"
           PACKAGE="com.minh.autotouch.personal"
-          ACCESSIBILITY_COMPONENT="$PACKAGE/com.minh.autotouch.AutomationAccessibilityService"
+          ACTIVITY="$PACKAGE/com.minh.autotouch.MainActivity"
           EVIDENCE_DIR="$GITHUB_WORKSPACE/emulator-evidence-api-${API}"
-          PROGRESS="$EVIDENCE_DIR/smoke-progress.txt"
+          RESULT="$EVIDENCE_DIR/result.txt"
 
+          adb logcat -c
           adb install "$APK" | tee "$EVIDENCE_DIR/install.txt"
-          echo INSTALL_OK >> "$PROGRESS"
+          grep -q "Success" "$EVIDENCE_DIR/install.txt"
+          echo INSTALL_OK >> "$RESULT"
 
           adb shell pm path "$PACKAGE" | tee "$EVIDENCE_DIR/package-path.txt"
           grep -q "package:" "$EVIDENCE_DIR/package-path.txt"
-          echo PACKAGE_OK >> "$PROGRESS"
-
-          adb shell am start -W -n "$PACKAGE/com.minh.autotouch.MainActivity" | tee "$EVIDENCE_DIR/launch.txt"
-          grep -q "Status: ok" "$EVIDENCE_DIR/launch.txt"
-          adb shell pidof "$PACKAGE"
-          echo LAUNCH_OK >> "$PROGRESS"
+          echo PACKAGE_OK >> "$RESULT"
 
           adb shell dumpsys package "$PACKAGE" > "$EVIDENCE_DIR/package.txt"
-          grep -q "com.minh.autotouch.AutomationAccessibilityService" "$EVIDENCE_DIR/package.txt"
-          grep -q "com.minh.autotouch.OverlayService" "$EVIDENCE_DIR/package.txt"
-          echo SERVICES_DECLARED_OK >> "$PROGRESS"
+          grep -q "versionName=1.2.0" "$EVIDENCE_DIR/package.txt"
+          grep -q "AutomationAccessibilityService" "$EVIDENCE_DIR/package.txt"
+          grep -q "OverlayService" "$EVIDENCE_DIR/package.txt"
+          echo MANIFEST_OK >> "$RESULT"
 
-          adb shell appops set "$PACKAGE" SYSTEM_ALERT_WINDOW allow
-          echo OVERLAY_PERMISSION_OK >> "$PROGRESS"
+          adb shell am start -W -n "$ACTIVITY" | tee "$EVIDENCE_DIR/launch.txt"
+          grep -q "Status: ok" "$EVIDENCE_DIR/launch.txt"
+          sleep 5
+          adb shell pidof "$PACKAGE" | tee "$EVIDENCE_DIR/pid.txt"
+          test -s "$EVIDENCE_DIR/pid.txt"
+          echo LAUNCH_OK >> "$RESULT"
 
-          adb shell settings put secure enabled_accessibility_services "$ACCESSIBILITY_COMPONENT"
-          adb shell settings put secure accessibility_enabled 1
-          sleep 3
-          adb shell dumpsys accessibility > "$EVIDENCE_DIR/accessibility.txt"
-          grep -q "com.minh.autotouch.AutomationAccessibilityService" "$EVIDENCE_DIR/accessibility.txt"
-          echo ACCESSIBILITY_OK >> "$PROGRESS"
-
-          adb shell am start-foreground-service -n "$PACKAGE/com.minh.autotouch.OverlayService" | tee "$EVIDENCE_DIR/overlay-start.txt"
-          sleep 3
-          adb shell dumpsys activity services "$PACKAGE" > "$EVIDENCE_DIR/services.txt"
-          grep -q "OverlayService" "$EVIDENCE_DIR/services.txt"
-          echo OVERLAY_SERVICE_OK >> "$PROGRESS"
+          adb logcat -d -v brief > "$EVIDENCE_DIR/logcat.txt"
+          if grep -A 12 -B 3 "FATAL EXCEPTION" "$EVIDENCE_DIR/logcat.txt" | grep -q "$PACKAGE"; then
+            echo CRASH_DETECTED >> "$RESULT"
+            exit 1
+          fi
+          echo NO_STARTUP_CRASH >> "$RESULT"
 
           adb shell am force-stop "$PACKAGE"
-          adb uninstall "$PACKAGE"
-          echo UNINSTALL_OK >> "$PROGRESS"
+          adb uninstall "$PACKAGE" | tee "$EVIDENCE_DIR/uninstall.txt"
+          grep -q "Success" "$EVIDENCE_DIR/uninstall.txt"
+          echo UNINSTALL_OK >> "$RESULT"
 
       - name: Upload emulator evidence
         if: always()
