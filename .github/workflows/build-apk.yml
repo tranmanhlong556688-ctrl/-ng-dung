@@ -1,10 +1,17 @@
-name: Build ML Cun Cung v2 APK
+name: Build AutoTouch Minh APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [main, ml-cun-cung-v2-semi3d]
+    branches: [auto-touch-v1]
+    paths:
+      - 'AutoTouchMinh/**'
+      - '.github/workflows/build-apk.yml'
   pull_request:
+    branches: [main]
+    paths:
+      - 'AutoTouchMinh/**'
+      - '.github/workflows/build-apk.yml'
 
 permissions:
   contents: read
@@ -14,56 +21,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK 35
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Setup Gradle 8.9
+      - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.7'
 
-      - name: Lint, test and build APK
-        id: gradle_build
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          gradle --no-daemon clean lintDebug testDebugUnitTest assembleDebug 2>&1 | tee build.log
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ML_Cun_Cung_v2_build_log
-          path: build.log
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Stop when Gradle failed
-        if: steps.gradle_build.outcome == 'failure'
-        run: exit 1
+      - name: Build AutoTouch debug APK
+        working-directory: AutoTouchMinh
+        run: gradle --no-daemon clean :app:assembleDebug --stacktrace
 
       - name: Prepare APK
         run: |
           mkdir -p output
-          cp app/build/outputs/apk/debug/app-debug.apk output/ML_Cun_Cung_v2.0_Semi3D-debug.apk
+          cp AutoTouchMinh/app/build/outputs/apk/debug/app-debug.apk output/AutoTouchMinh_v1.0.0-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ML_Cun_Cung_v2.0_Semi3D_APK
-          path: output/ML_Cun_Cung_v2.0_Semi3D-debug.apk
+          name: AutoTouchMinh-v1.0.0-debug-APK
+          path: output/AutoTouchMinh_v1.0.0-debug.apk
           if-no-files-found: error
           retention-days: 30
