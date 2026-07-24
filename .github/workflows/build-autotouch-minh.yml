@@ -170,24 +170,26 @@ jobs:
             APK="apk-output/AutoTouchMinh-v1.2.0-installable-release.apk"
             PACKAGE="com.minh.autotouch.personal"
             ACCESSIBILITY_COMPONENT="$PACKAGE/com.minh.autotouch.AutomationAccessibilityService"
-            PROGRESS="smoke-progress-api-${{ matrix.api-level }}.txt"
+            EVIDENCE_DIR="$GITHUB_WORKSPACE/emulator-evidence-api-${{ matrix.api-level }}"
+            mkdir -p "$EVIDENCE_DIR"
+            PROGRESS="$EVIDENCE_DIR/smoke-progress.txt"
             : > "$PROGRESS"
 
-            adb install "$APK" | tee "install-api-${{ matrix.api-level }}.txt"
+            adb install "$APK" | tee "$EVIDENCE_DIR/install.txt"
             echo INSTALL_OK >> "$PROGRESS"
 
-            adb shell pm path "$PACKAGE" | tee "package-path-api-${{ matrix.api-level }}.txt"
-            grep -q "package:" "package-path-api-${{ matrix.api-level }}.txt"
+            adb shell pm path "$PACKAGE" | tee "$EVIDENCE_DIR/package-path.txt"
+            grep -q "package:" "$EVIDENCE_DIR/package-path.txt"
             echo PACKAGE_OK >> "$PROGRESS"
 
-            adb shell am start -W -n "$PACKAGE/com.minh.autotouch.MainActivity" | tee "launch-api-${{ matrix.api-level }}.txt"
-            grep -q "Status: ok" "launch-api-${{ matrix.api-level }}.txt"
+            adb shell am start -W -n "$PACKAGE/com.minh.autotouch.MainActivity" | tee "$EVIDENCE_DIR/launch.txt"
+            grep -q "Status: ok" "$EVIDENCE_DIR/launch.txt"
             adb shell pidof "$PACKAGE"
             echo LAUNCH_OK >> "$PROGRESS"
 
-            adb shell dumpsys package "$PACKAGE" > "package-api-${{ matrix.api-level }}.txt"
-            grep -q "com.minh.autotouch.AutomationAccessibilityService" "package-api-${{ matrix.api-level }}.txt"
-            grep -q "com.minh.autotouch.OverlayService" "package-api-${{ matrix.api-level }}.txt"
+            adb shell dumpsys package "$PACKAGE" > "$EVIDENCE_DIR/package.txt"
+            grep -q "com.minh.autotouch.AutomationAccessibilityService" "$EVIDENCE_DIR/package.txt"
+            grep -q "com.minh.autotouch.OverlayService" "$EVIDENCE_DIR/package.txt"
             echo SERVICES_DECLARED_OK >> "$PROGRESS"
 
             adb shell appops set "$PACKAGE" SYSTEM_ALERT_WINDOW allow
@@ -196,14 +198,14 @@ jobs:
             adb shell settings put secure enabled_accessibility_services "$ACCESSIBILITY_COMPONENT"
             adb shell settings put secure accessibility_enabled 1
             sleep 3
-            adb shell dumpsys accessibility > "accessibility-api-${{ matrix.api-level }}.txt"
-            grep -q "com.minh.autotouch.AutomationAccessibilityService" "accessibility-api-${{ matrix.api-level }}.txt"
+            adb shell dumpsys accessibility > "$EVIDENCE_DIR/accessibility.txt"
+            grep -q "com.minh.autotouch.AutomationAccessibilityService" "$EVIDENCE_DIR/accessibility.txt"
             echo ACCESSIBILITY_OK >> "$PROGRESS"
 
-            adb shell am start-foreground-service -n "$PACKAGE/com.minh.autotouch.OverlayService" | tee "overlay-start-api-${{ matrix.api-level }}.txt"
+            adb shell am start-foreground-service -n "$PACKAGE/com.minh.autotouch.OverlayService" | tee "$EVIDENCE_DIR/overlay-start.txt"
             sleep 3
-            adb shell dumpsys activity services "$PACKAGE" > "services-api-${{ matrix.api-level }}.txt"
-            grep -q "OverlayService" "services-api-${{ matrix.api-level }}.txt"
+            adb shell dumpsys activity services "$PACKAGE" > "$EVIDENCE_DIR/services.txt"
+            grep -q "OverlayService" "$EVIDENCE_DIR/services.txt"
             echo OVERLAY_SERVICE_OK >> "$PROGRESS"
 
             adb shell am force-stop "$PACKAGE"
@@ -215,14 +217,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AutoTouchMinh_Emulator_API_${{ matrix.api-level }}_Evidence
-          path: |
-            smoke-progress-api-${{ matrix.api-level }}.txt
-            install-api-${{ matrix.api-level }}.txt
-            package-path-api-${{ matrix.api-level }}.txt
-            launch-api-${{ matrix.api-level }}.txt
-            package-api-${{ matrix.api-level }}.txt
-            accessibility-api-${{ matrix.api-level }}.txt
-            overlay-start-api-${{ matrix.api-level }}.txt
-            services-api-${{ matrix.api-level }}.txt
-          if-no-files-found: ignore
+          path: emulator-evidence-api-${{ matrix.api-level }}/
+          if-no-files-found: error
           retention-days: 14
