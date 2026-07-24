@@ -51,7 +51,7 @@ class MainActivity : Activity() {
         setContentView(scroll)
 
         root.addView(TextView(this).apply {
-            text = "Auto Touch Minh v1.1.0 – Chế độ an toàn"
+            text = "Auto Touch Minh v1.2.1 – Chế độ an toàn"
             textSize = 23f
             setTextColor(Color.rgb(13, 71, 161))
             setPadding(0, 0, 0, dp(8))
