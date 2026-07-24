@@ -1,9 +1,9 @@
-name: Build Auto Touch Minh Safe APK
+name: Build and Emulator Test Auto Touch Minh v1.2
 
 on:
   workflow_dispatch:
   push:
-    branches: [agent/autotouch-minh-v1-1-compliant]
+    branches: [agent/autotouch-minh-v1-2-emulator-tested]
     paths:
       - 'AutoTouchMinh/**'
       - '.github/workflows/build-autotouch-minh.yml'
@@ -15,13 +15,16 @@ on:
 permissions:
   contents: read
 
+env:
+  APP_DIR: AutoTouchMinh
+  KEYSTORE_PATH: AutoTouchMinh/.ci/autotouch-personal-test.jks
+  KEY_ALIAS: autotouch_personal
+  STORE_PASSWORD: AutoTouchMinh_v12_personal_test
+  KEY_PASSWORD: AutoTouchMinh_v12_personal_test
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: AutoTouchMinh
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,53 +35,170 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Lint and build APKs
+      - name: Restore stable personal signing key
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.KEYSTORE_PATH }}
+          key: autotouch-minh-personal-signing-v1
+
+      - name: Create signing key when missing
+        shell: bash
+        run: |
+          mkdir -p "$(dirname "$KEYSTORE_PATH")"
+          if [ ! -f "$KEYSTORE_PATH" ]; then
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_PATH" \
+              -storepass "$STORE_PASSWORD" \
+              -alias "$KEY_ALIAS" \
+              -keypass "$KEY_PASSWORD" \
+              -keyalg RSA -keysize 3072 -validity 10000 \
+              -dname "CN=Auto Touch Minh Personal, OU=Personal Automation, O=Minh, L=Vietnam, C=VN"
+          fi
+
+      - name: Lint and build signed APKs
         id: gradle_build
         continue-on-error: true
+        working-directory: AutoTouchMinh
+        env:
+          AUTOTOUCH_KEYSTORE_PATH: ${{ github.workspace }}/${{ env.KEYSTORE_PATH }}
+          AUTOTOUCH_STORE_PASSWORD: ${{ env.STORE_PASSWORD }}
+          AUTOTOUCH_KEY_ALIAS: ${{ env.KEY_ALIAS }}
+          AUTOTOUCH_KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
         shell: bash
         run: |
           set -o pipefail
           gradle --no-daemon clean lintDebug assembleDebug assembleRelease 2>&1 | tee build.log
 
+      - name: Verify APK signatures
+        if: steps.gradle_build.outcome == 'success'
+        working-directory: AutoTouchMinh
+        shell: bash
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk | tee signature-debug.txt
+          "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk | tee signature-release.txt
+          grep -q "Verified using v2 scheme" signature-release.txt
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: AutoTouchMinh_v1.1.0_build_log
-          path: AutoTouchMinh/build.log
-          if-no-files-found: error
+          name: AutoTouchMinh_v1.2.0_build_log
+          path: |
+            AutoTouchMinh/build.log
+            AutoTouchMinh/signature-debug.txt
+            AutoTouchMinh/signature-release.txt
+          if-no-files-found: ignore
           retention-days: 14
 
-      - name: Stop when Gradle failed
+      - name: Stop when build failed
         if: steps.gradle_build.outcome == 'failure'
         run: exit 1
 
-      - name: Prepare deliverables
+      - name: Prepare APKs and source
+        working-directory: AutoTouchMinh
+        shell: bash
         run: |
           mkdir -p output
-          cp app/build/outputs/apk/debug/app-debug.apk output/AutoTouchMinh-v1.1.0-safe-debug.apk
-          cp app/build/outputs/apk/release/app-release.apk output/AutoTouchMinh-v1.1.0-safe-release.apk
-          zip -qr output/AutoTouchMinh-v1.1.0-safe-source.zip . -x 'app/build/*' '.gradle/*' 'output/*' 'build.log'
+          cp app/build/outputs/apk/debug/app-debug.apk output/AutoTouchMinh-v1.2.0-debug.apk
+          cp app/build/outputs/apk/release/app-release.apk output/AutoTouchMinh-v1.2.0-installable-release.apk
+          sha256sum output/*.apk > output/SHA256SUMS.txt
+          zip -qr output/AutoTouchMinh-v1.2.0-source.zip . \
+            -x 'app/build/*' '.gradle/*' '.ci/*' 'output/*' 'build.log' 'signature-*.txt'
 
-      - name: Upload APKs
+      - name: Upload APKs for emulator tests and delivery
         uses: actions/upload-artifact@v4
         with:
-          name: AutoTouchMinh_v1.1.0_Safe_APK
+          name: AutoTouchMinh_v1.2.0_Installable_APKs
           path: |
-            AutoTouchMinh/output/AutoTouchMinh-v1.1.0-safe-debug.apk
-            AutoTouchMinh/output/AutoTouchMinh-v1.1.0-safe-release.apk
+            AutoTouchMinh/output/AutoTouchMinh-v1.2.0-debug.apk
+            AutoTouchMinh/output/AutoTouchMinh-v1.2.0-installable-release.apk
+            AutoTouchMinh/output/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload source
         uses: actions/upload-artifact@v4
         with:
-          name: AutoTouchMinh_v1.1.0_Safe_Source
-          path: AutoTouchMinh/output/AutoTouchMinh-v1.1.0-safe-source.zip
+          name: AutoTouchMinh_v1.2.0_Source
+          path: AutoTouchMinh/output/AutoTouchMinh-v1.2.0-source.zip
           if-no-files-found: error
           retention-days: 30
+
+  emulator_smoke_test:
+    needs: build
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [33, 35]
+    steps:
+      - name: Download signed APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: AutoTouchMinh_v1.2.0_Installable_APKs
+          path: apk-output
+
+      - name: Boot emulator and test installation/services
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euxo pipefail
+            APK="apk-output/AutoTouchMinh-v1.2.0-installable-release.apk"
+            PACKAGE="com.minh.autotouch.personal"
+            ACCESSIBILITY_COMPONENT="$PACKAGE/com.minh.autotouch.AutomationAccessibilityService"
+
+            adb install "$APK"
+            adb shell pm list packages | grep -q "package:$PACKAGE"
+
+            adb shell am start -W -n "$PACKAGE/com.minh.autotouch.MainActivity" | tee launch.txt
+            grep -q "Status: ok" launch.txt
+            sleep 2
+            adb shell pidof "$PACKAGE"
+
+            adb shell uiautomator dump /sdcard/autotouch-window.xml || true
+            adb pull /sdcard/autotouch-window.xml "window-api-${{ matrix.api-level }}.xml" || true
+            grep -q "Auto Touch Minh v1.1.0" "window-api-${{ matrix.api-level }}.xml"
+
+            adb shell appops set "$PACKAGE" SYSTEM_ALERT_WINDOW allow
+            adb shell settings put secure enabled_accessibility_services "$ACCESSIBILITY_COMPONENT"
+            adb shell settings put secure accessibility_enabled 1
+            sleep 3
+            adb shell dumpsys accessibility > "accessibility-api-${{ matrix.api-level }}.txt"
+            grep -q "com.minh.autotouch.AutomationAccessibilityService" "accessibility-api-${{ matrix.api-level }}.txt"
+
+            adb shell am start-foreground-service -n "$PACKAGE/com.minh.autotouch.OverlayService"
+            sleep 3
+            adb shell dumpsys activity services "$PACKAGE" > "services-api-${{ matrix.api-level }}.txt"
+            grep -q "OverlayService" "services-api-${{ matrix.api-level }}.txt"
+
+            adb shell am force-stop "$PACKAGE"
+            adb uninstall "$PACKAGE"
+
+      - name: Upload emulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoTouchMinh_Emulator_API_${{ matrix.api-level }}_Evidence
+          path: |
+            launch.txt
+            window-api-${{ matrix.api-level }}.xml
+            accessibility-api-${{ matrix.api-level }}.txt
+            services-api-${{ matrix.api-level }}.txt
+          if-no-files-found: ignore
+          retention-days: 14
