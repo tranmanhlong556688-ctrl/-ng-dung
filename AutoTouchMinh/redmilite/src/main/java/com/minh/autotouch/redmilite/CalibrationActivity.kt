@@ -46,8 +46,8 @@ class CalibrationActivity : Activity() {
             textSize = 17f
             gravity = Gravity.CENTER
             setTextColor(Color.DKGRAY)
-            updateCoordinateText()
         }
+        updateCoordinateText()
         root.addView(coordinateText, LinearLayout.LayoutParams(-1, -2))
 
         grid = CoordinateGridView().apply {
@@ -90,7 +90,7 @@ class CalibrationActivity : Activity() {
         coordinateText.text = "Tọa độ màn hình: X = $screenX, Y = $screenY"
     }
 
-    private inner class CoordinateGridView : View(this) {
+    private inner class CoordinateGridView : View(this@CalibrationActivity) {
         private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(210, 220, 230)
             strokeWidth = 1f
