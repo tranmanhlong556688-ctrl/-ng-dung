@@ -9,6 +9,12 @@ on:
       - 'AutoTouchMinh/ci/redmi_lite_api33_test.sh'
       - 'AutoTouchMinh/settings.gradle.kts'
       - '.github/workflows/build-autotouch-redmi-lite.yml'
+  pull_request:
+    paths:
+      - 'AutoTouchMinh/redmilite/**'
+      - 'AutoTouchMinh/ci/redmi_lite_api33_test.sh'
+      - 'AutoTouchMinh/settings.gradle.kts'
+      - '.github/workflows/build-autotouch-redmi-lite.yml'
 
 permissions:
   contents: read
