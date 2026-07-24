@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "AutoTouchMinh"
-include(":app", ":installtest")
+include(":app", ":installtest", ":redmilite")
