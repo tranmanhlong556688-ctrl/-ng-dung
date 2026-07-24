@@ -15,15 +15,15 @@ val hasReleaseSigning = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "com.minh.autotouch"
+    namespace = "com.minh.autotouch.installtest"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.minh.autotouch.personal"
+        applicationId = "com.minh.autotouch.installtest"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.2.1"
+        versionCode = 1
+        versionName = "1.0.0"
     }
 
     signingConfigs {
@@ -41,35 +41,11 @@ android {
         }
     }
 
-    flavorDimensions += "releaseTrack"
-    productFlavors {
-        create("baseline") {
-            dimension = "releaseTrack"
-            versionCode = 3
-            versionName = "1.2.0"
-        }
-        create("production") {
-            dimension = "releaseTrack"
-            versionCode = 4
-            versionName = "1.2.1"
-        }
-    }
-
     buildTypes {
-        debug {
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
-        }
         release {
             isDebuggable = false
             isMinifyEnabled = false
-            if (hasReleaseSigning) {
-                signingConfig = signingConfigs.getByName("releaseKey")
-            }
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("releaseKey")
         }
     }
 
@@ -80,13 +56,9 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 
-// Release artifacts must never silently fall back to the Android debug key.
 gradle.taskGraph.whenReady {
-    val releaseRequested = allTasks.any { it.name.contains("Release", ignoreCase = true) }
+    val releaseRequested = allTasks.any { it.path.startsWith(":installtest:") && it.name.contains("Release", true) }
     if (releaseRequested && !hasReleaseSigning) {
-        throw GradleException(
-            "Release signing is missing. Set AUTOTOUCH_KEYSTORE_PATH, " +
-                "AUTOTOUCH_STORE_PASSWORD, AUTOTOUCH_KEY_ALIAS and AUTOTOUCH_KEY_PASSWORD."
-        )
+        throw GradleException("Installation Test release signing variables are missing.")
     }
 }

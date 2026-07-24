@@ -1,31 +1,23 @@
-# Auto Touch Minh v1.0.0
+# Auto Touch Minh v1.2.0 — bản cài đặt đã kiểm thử
 
-Ứng dụng Android tự động thực hiện chuỗi thao tác tại tối đa 10 điểm do người dùng tự cấu hình.
+Ứng dụng Android cá nhân, không root, thực hiện chuỗi nhấp/nhấn giữ/vuốt cố định do người dùng tự cấu hình.
 
-## Chức năng đã có
+## Quyền bắt buộc
 
-- 10 điểm nổi kéo thả, bật/tắt riêng.
-- Chạy theo thứ tự tăng dần và lặp lại.
-- Nhấp, nhấp nhiều lần, nhấp đúp, nhấn giữ.
-- Vuốt lên/xuống/trái/phải hoặc đến tọa độ đích.
-- Chờ, Quay lại, Home, ứng dụng gần đây, mở thông báo.
-- Cài thời gian chờ trước/sau, khoảng cách nhấp và thời lượng.
-- Bắt đầu, tạm dừng, tiếp tục, dừng, thu nhỏ, khóa điểm.
-- Dừng khẩn cấp bằng nút dừng hoặc bấm Giảm âm lượng 3 lần trong 1,5 giây.
-- Xuất/nhập cấu hình JSON và xuất nhật ký CSV.
-- Không root, không quảng cáo, không đăng nhập, không gửi dữ liệu ra mạng.
+- **Accessibility Service:** bắt buộc để Android cho phép phát cử chỉ cảm ứng. Bỏ quyền này thì ứng dụng không thể tự nhấp hoặc vuốt.
+- **Hiển thị trên ứng dụng khác:** bắt buộc cho các điểm và bảng điều khiển nổi. Có thể bỏ trong một phiên bản khác nếu chấp nhận nhập tọa độ trong màn hình ứng dụng.
+- **Foreground Service:** duy trì bảng điều khiển nổi và thông báo đang chạy.
 
-## Yêu cầu
+## Những chức năng nhạy cảm đã loại bỏ
 
-- Android 8.0 trở lên (minSdk 26).
-- Cấp quyền Hiển thị trên ứng dụng khác.
-- Bật Dịch vụ trợ năng `Auto Touch Minh`.
-- Trên Xiaomi/Redmi nên đặt Pin thành `Không hạn chế` và bật Tự khởi động.
+- Không bắt phím âm lượng.
+- Không có Home, Recent Apps hoặc mở bảng thông báo.
+- Không có quyền Internet, rung, đọc bộ nhớ hay đọc nội dung cửa sổ.
+- Không chạy vô hạn; số vòng và tốc độ được giới hạn.
+- Tự dừng khi rời ứng dụng đã được người dùng cho phép.
 
-## Build
+## Khắc phục lỗi cài đặt
 
-Workflow `.github/workflows/build-autotouch-minh.yml` dùng Java 17, Gradle 8.9 và build APK debug tự động.
+Phiên bản 1.2.0 dùng applicationId mới `com.minh.autotouch.personal`, vì vậy không bị xung đột chữ ký với APK v1.0/v1.1 đã build trên máy chủ khác. APK release được ký bằng khóa thử nghiệm riêng và được kiểm tra bằng `apksigner` trước khi phát hành.
 
-## Giới hạn an toàn
-
-Không dùng trên màn hình khóa, ứng dụng ngân hàng, màn hình nhập mật khẩu, CAPTCHA hoặc nơi bạn không có quyền tự động hóa. Android có thể dừng dịch vụ nền khi tối ưu pin; hãy cấp lại quyền khi cần.
+GitHub Actions cài APK thật lên Android Emulator API 33 và API 35, mở MainActivity, bật thử Accessibility Service, cấp quyền overlay và khởi động OverlayService. Chỉ khi cả hai máy giả lập vượt qua kiểm tra, APK mới được bàn giao.
