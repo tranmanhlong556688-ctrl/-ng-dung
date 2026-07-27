@@ -1,0 +1,111 @@
+name: Build Minh ScreenCam EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [minh-screencam-v1]
+    paths:
+      - "windows/minh-screencam-source-v1.0.part*.b64"
+      - ".github/workflows/build-minh-screencam.yml"
+  pull_request:
+    paths:
+      - "windows/minh-screencam-source-v1.0.part*.b64"
+      - ".github/workflows/build-minh-screencam.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract source bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path windows\minh-screencam | Out-Null
+          $parts = Get-ChildItem windows\minh-screencam-source-v1.0.part*.b64 | Sort-Object Name
+          if ($parts.Count -ne 5) { throw "Thiếu gói mã nguồn: cần đủ 5 phần" }
+          $encoded = ($parts | ForEach-Object { (Get-Content $_.FullName -Raw).Trim() }) -join ""
+          [IO.File]::WriteAllBytes("$PWD\MinhScreenCam_Source.zip", [Convert]::FromBase64String($encoded))
+          Expand-Archive "$PWD\MinhScreenCam_Source.zip" -DestinationPath windows\minh-screencam -Force
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: windows/minh-screencam/requirements.txt
+
+      - name: Install Python dependencies
+        working-directory: windows/minh-screencam
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generate application icon
+        working-directory: windows/minh-screencam
+        shell: pwsh
+        run: python tools/generate_icon.py
+
+      - name: Syntax check
+        working-directory: windows/minh-screencam
+        shell: pwsh
+        run: python -m compileall -q src
+
+      - name: Download FFmpeg essentials
+        working-directory: windows/minh-screencam
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bin | Out-Null
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_extract -Force
+          $ffmpeg = Get-ChildItem ffmpeg_extract -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $ffmpeg) { throw "Không tìm thấy ffmpeg.exe" }
+          Copy-Item $ffmpeg.FullName bin\ffmpeg.exe -Force
+
+      - name: Build portable application
+        working-directory: windows/minh-screencam
+        shell: cmd
+        run: pyinstaller --noconfirm --clean MinhScreenCam.spec
+
+      - name: Smoke test package
+        working-directory: windows/minh-screencam
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist\MinhScreenCam\MinhScreenCam.exe")) { throw "Thiếu file EXE" }
+          if (-not (Test-Path "dist\MinhScreenCam\_internal\bin\ffmpeg.exe") -and -not (Test-Path "dist\MinhScreenCam\bin\ffmpeg.exe")) {
+            throw "FFmpeg chưa được đóng gói"
+          }
+
+      - name: Create portable ZIP
+        working-directory: windows/minh-screencam
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path output | Out-Null
+          Compress-Archive -Path dist\MinhScreenCam\* -DestinationPath output\MinhScreenCam_v1.0.0_Portable.zip -Force
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        working-directory: windows/minh-screencam
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\MinhScreenCam.iss"
+          Copy-Item installer_output\MinhScreenCam_Setup_v1.0.0.exe output\ -Force
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: MinhScreenCam_v1.0.0_Windows
+          path: |
+            windows/minh-screencam/output/MinhScreenCam_Setup_v1.0.0.exe
+            windows/minh-screencam/output/MinhScreenCam_v1.0.0_Portable.zip
+          if-no-files-found: error
+          retention-days: 30
